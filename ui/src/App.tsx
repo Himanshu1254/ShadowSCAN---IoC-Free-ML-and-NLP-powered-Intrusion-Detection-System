@@ -1,100 +1,188 @@
 import { useEffect, useState } from "react";
+import TrafficGraph from "./components/TrafficGraph";
 
 function App() {
+  const [alerts, setAlerts] = useState<any[]>([]);
   const [stats, setStats] = useState({
     packets: 0,
     flows: 0,
     sessions: 0,
-    alerts_24h: 0,
+    alerts: 0,
   });
 
-  const [alerts, setAlerts] = useState<any[]>([]);
-
   const fetchData = async () => {
-    try {
-      const statsRes = await fetch("http://127.0.0.1:8000/overview/stats");
-      const statsData = await statsRes.json();
-      setStats(statsData);
+    const statsRes = await fetch("http://127.0.0.1:8000/overview/stats");
+    const alertsRes = await fetch("http://127.0.0.1:8000/alerts");
 
-      const alertsRes = await fetch("http://127.0.0.1:8000/alerts");
-      const alertsData = await alertsRes.json();
-      setAlerts(alertsData);
-    } catch (err) {
-      console.error(err);
-    }
+    setStats(await statsRes.json());
+    setAlerts(await alertsRes.json());
   };
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 2000);
-    return () => clearInterval(interval);
+    const i = setInterval(fetchData, 2000);
+    return () => clearInterval(i);
   }, []);
 
-  return (
-    <div style={{ padding: "30px", background: "#050505", color: "#fff", minHeight: "100vh", fontFamily: "monospace" }}>
-      
-      <h1 style={{ fontSize: "28px", marginBottom: "20px" }}>
-        🚀 ShadowSCAN Security Dashboard
-      </h1>
+  const color = (s: string) =>
+    s === "HIGH" ? "red" : s === "MEDIUM" ? "orange" : "lime";
 
-      {/* Stats */}
-      <div style={{ display: "flex", gap: "20px", marginBottom: "30px" }}>
+  return (
+    <div
+      style={{
+        padding: "20px",
+        background: "#050505",
+        color: "#fff",
+        minHeight: "100vh",
+        fontFamily: "monospace",
+      }}
+    >
+      {/* 🔥 HEADER */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <h1>🚀 ShadowSCAN Advanced IDS</h1>
+
+        {/* 🔴 LIVE BLINK */}
+        <div style={{ color: "red", fontWeight: "bold", animation: "blink 1s infinite" }}>
+          ● LIVE
+        </div>
+      </div>
+
+      {/* 🔥 STATUS BUTTONS */}
+      <div style={{ display: "flex", gap: "10px", margin: "10px 0 20px 0" }}>
+        <StatusButton label="System Online" color="#007bff" />
+        <StatusButton label="System Offline" color="#ff3b3b" />
+        <StatusButton label="Poor Network" color="#ffc107" />
+      </div>
+
+      {/* 🔥 STATS CARDS */}
+      <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
         <Card title="Packets" value={stats.packets} />
         <Card title="Flows" value={stats.flows} />
         <Card title="Sessions" value={stats.sessions} />
-        <Card title="Alerts" value={stats.alerts_24h} />
+        <Card title="Alerts" value={stats.alerts} />
       </div>
 
-      {/* Alerts Table */}
-      <h2 style={{ marginBottom: "10px" }}>🚨 Live Alerts</h2>
+      {/* GRAPH */}
+      <TrafficGraph alerts={alerts} />
 
-      <div style={{ background: "#0a0a0a", padding: "15px", borderRadius: "8px" }}>
-        {alerts.length === 0 ? (
-          <p>No alerts detected</p>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ textAlign: "left", borderBottom: "1px solid #333" }}>
-                <th>Type</th>
-                <th>Source</th>
-                <th>Destination</th>
-                <th>Protocol</th>
-                <th>Severity</th>
+      <h2>🚨 Live Alerts</h2>
+
+      {/* TABLE */}
+      <div
+        style={{
+          maxHeight: "400px",
+          overflow: "auto",
+          border: "1px solid #222",
+          borderRadius: "8px",
+          background: "#0a0a0a",
+        }}
+      >
+        <table
+          style={{
+            minWidth: "900px",
+            width: "100%",
+            borderCollapse: "collapse",
+          }}
+        >
+          <thead style={{ position: "sticky", top: 0, background: "#111" }}>
+            <tr>
+              <th style={th}>Source</th>
+              <th style={th}>Destination</th>
+              <th style={th}>Protocol</th>
+              <th style={th}>Severity</th>
+              <th style={th}>Confidence</th>
+              <th style={th}>Attack</th>
+              <th style={th}>Explanation</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {alerts.map((a, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid #222" }}>
+                <td style={td}>{a.src_ip}</td>
+                <td style={td}>{a.dst_ip}</td>
+                <td style={td}>{a.protocol}</td>
+
+                <td style={{ ...td, color: color(a.severity) }}>
+                  {a.severity}
+                </td>
+
+                <td style={{ ...td, color: "#00ffff" }}>
+                  {a.confidence}
+                </td>
+
+                <td style={td}>{a.attack_type}</td>
+
+                <td style={{ ...td, maxWidth: "400px" }}>
+                  {a.explanation}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {alerts.map((a, i) => (
-                <tr key={i} style={{ borderBottom: "1px solid #222" }}>
-                  <td>{a.type}</td>
-                  <td>{a.src_ip}</td>
-                  <td>{a.dst_ip}</td>
-                  <td>{a.protocol}</td>
-                  <td style={{ color: a.severity === "high" ? "red" : "orange" }}>
-                    {a.severity}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+            ))}
+          </tbody>
+        </table>
       </div>
+
+      {/* 🔥 BLINK CSS */}
+      <style>
+        {`
+          @keyframes blink {
+            0% { opacity: 1 }
+            50% { opacity: 0 }
+            100% { opacity: 1 }
+          }
+        `}
+      </style>
     </div>
   );
 }
 
+/* 🔥 COMPONENTS */
+
 function Card({ title, value }: any) {
   return (
-    <div style={{
-      background: "#0a0a0a",
-      padding: "20px",
-      borderRadius: "8px",
-      width: "150px",
-      border: "1px solid #222"
-    }}>
-      <div style={{ fontSize: "12px", color: "#888" }}>{title}</div>
+    <div
+      style={{
+        background: "#0a0a0a",
+        padding: "15px",
+        borderRadius: "6px",
+        width: "150px",
+        border: "1px solid #222",
+      }}
+    >
+      <div style={{ color: "#888", fontSize: "12px" }}>{title}</div>
       <div style={{ fontSize: "20px" }}>{value}</div>
     </div>
   );
 }
+
+function StatusButton({ label, color }: any) {
+  return (
+    <button
+      style={{
+        background: color,
+        color: "#000",
+        border: "none",
+        padding: "6px 12px",
+        fontSize: "12px",
+        borderRadius: "4px",
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+const th = {
+  padding: "10px",
+  borderBottom: "1px solid #333",
+  color: "#aaa",
+  textAlign: "left" as const,
+};
+
+const td = {
+  padding: "8px",
+  fontSize: "12px",
+};
 
 export default App;

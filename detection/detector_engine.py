@@ -1,29 +1,65 @@
 from detection.ml_detector import MLDetector
+from detection.nlp_explainer import NLPExplainer
 
 
 class DetectorEngine:
     def __init__(self):
         self.detector = MLDetector()
+        self.explainer = NLPExplainer()
         self.training_done = False
 
-    def get_severity(self, score):
-        if score < -0.25:
-            return "HIGH"
-        elif score < -0.15:
-            return "MEDIUM"
-        else:
-            return "LOW"
+    def classify_attack(self, session):
+        flow = session.get("flow_count", 0)
+        pkt = session.get("packet_count", 0)
+        port = session.get("dst_port", 0)
+        duration = session.get("duration", 1)
 
-    def get_confidence(self, score):
-        confidence = min(abs(score) * 100, 100)
-        return f"{confidence:.0f}%"
+        if flow > 25:
+            return "Port Scan", "Multiple ports targeted"
+
+        if pkt > 700:
+            return "Traffic Flood", "High packet volume"
+
+        if duration < 0.5 and pkt > 150:
+            return "Burst Traffic", "Packet burst detected"
+
+        if flow > 8:
+            return "Suspicious Activity", "Too many flows"
+
+        if port not in [80, 443, 53] and flow < 5:
+            return "Unusual Access", "Access to uncommon port"
+
+        return "Normal", "No anomaly"
+
+    def get_severity(self, attack):
+        if attack in ["Port Scan", "Traffic Flood"]:
+            return "HIGH"
+        if attack in ["Burst Traffic", "Suspicious Activity"]:
+            return "MEDIUM"
+        return "LOW"
+
+    def get_confidence(self, session, attack):
+        flow = session.get("flow_count", 0)
+        pkt = session.get("packet_count", 0)
+
+        base = 30
+
+        if attack == "Port Scan":
+            base += flow * 2
+        elif attack == "Traffic Flood":
+            base += pkt / 10
+        elif attack == "Burst Traffic":
+            base += pkt / 20
+        elif attack == "Suspicious Activity":
+            base += flow * 1.5
+        else:
+            base += 5
+
+        return f"{min(int(base), 100)}%"
 
     def process_sessions(self, sessions):
         alerts = []
 
-        # -----------------------
-        # TRAINING PHASE
-        # -----------------------
         if not self.training_done:
             for s in sessions:
                 self.detector.add_to_training(s)
@@ -34,30 +70,29 @@ class DetectorEngine:
 
             return []
 
-        # -----------------------
-        # DETECTION PHASE
-        # -----------------------
         for s in sessions:
-            result = self.detector.predict(s)
+            attack, reason = self.classify_attack(s)
 
-            if result["anomaly"]:
-                score = result["score"]
+            if attack == "Normal":
+                continue
 
-                alert = {
-                    "title": "Anomalous Network Activity",
-                    "src_ip": s.get("src_ip"),
-                    "dst_ip": s.get("dst_ip"),
-                    "protocol": s.get("protocol"),
-                    "packet_count": s.get("packet_count"),
-                    "byte_count": s.get("byte_count"),
+            explanation = self.explainer.explain({
+                "attack_type": attack
+            })
 
-                    # 🔥 NEW FIELDS (UI WAS WAITING FOR THESE)
-                    "severity": self.get_severity(score),
-                    "confidence": self.get_confidence(score),
-                    "reason": result.get("reason", "Anomalous pattern detected"),
-                    "score": score,
-                }
+            alert = {
+                "src_ip": s.get("src_ip"),
+                "dst_ip": s.get("dst_ip"),
+                "protocol": s.get("protocol"),
 
-                alerts.append(alert)
+                "severity": self.get_severity(attack),
+                "confidence": self.get_confidence(s, attack),
+
+                "attack_type": attack,
+                "reason": reason,
+                "explanation": explanation,
+            }
+
+            alerts.append(alert)
 
         return alerts

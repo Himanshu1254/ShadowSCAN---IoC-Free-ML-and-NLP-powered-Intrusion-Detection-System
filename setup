@@ -1,0 +1,45 @@
+🔹 Activate Virtual Environment (Windows)
+
+venv\Scripts\activate
+
+
+
+
+
+
+▶️ Start Backend (FastAPI)
+
+uvicorn main:app --reload
+
+
+
+
+
+💻 Start Frontend (if React)
+
+cd D:\Projects\ShadowSCAN\ui
+npm run dev
+
+
+
+
+
+▶️ Generate Traffic
+
+ping google.com -t
+
+nmap -T5 -p- 127.0.0.1
+
+
+
+
+
+🧪 Debug / Development Flow
+
+# always first
+git pull
+
+# after work
+git add .
+git commit -m "your update"
+git push
