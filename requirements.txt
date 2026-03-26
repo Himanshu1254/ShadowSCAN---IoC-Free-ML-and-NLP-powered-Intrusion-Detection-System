@@ -1,0 +1,58 @@
+# =========================
+# CORE
+# =========================
+numpy
+pandas
+pyyaml
+python-dotenv
+rich
+tqdm
+
+# =========================
+# NETWORK CAPTURE (WINDOWS)
+# =========================
+scapy
+pyshark
+dpkt
+
+# =========================
+# API BACKEND
+# =========================
+fastapi
+uvicorn
+pydantic
+websockets
+httpx
+
+# =========================
+# NLP (NETWORK LANGUAGE)
+# =========================
+transformers
+tokenizers
+sentencepiece
+nltk
+spacy
+
+# =========================
+# ML / ANALYTICS
+# =========================
+scikit-learn
+scipy
+networkx
+
+# =========================
+# DEEP LEARNING
+# =========================
+torch
+torchvision
+torchaudio
+
+# =========================
+# VISUAL / DEBUG
+# =========================
+matplotlib
+
+# =========================
+# TESTING
+# =========================
+pytest
