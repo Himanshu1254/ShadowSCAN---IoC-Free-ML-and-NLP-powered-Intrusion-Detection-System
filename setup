@@ -43,7 +43,3 @@ git pull
 git add .
 git commit -m "your update"
 git push
-
-
-git commit -m "added automated batch file"
-git push
