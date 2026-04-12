@@ -7,6 +7,12 @@ from engine.pipeline import Pipeline
 from engine.runtime_state import state
 from metrics import set_counts, snapshot
 
+from fastapi import UploadFile, File
+import shutil
+import os
+from shadow_logging.log_analyzer import LogAnalyzer
+
+
 # -------------------------------------------------
 # FastAPI App
 # -------------------------------------------------
@@ -72,3 +78,21 @@ def get_sessions():
 @app.get("/alerts")
 def get_alerts():
     return state.alerts
+
+
+@app.post("/upload-log")
+async def upload_log(file: UploadFile = File(...)):
+    upload_dir = "uploaded_logs"
+    os.makedirs(upload_dir, exist_ok=True)
+
+    file_path = os.path.join(upload_dir, file.filename)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    analyzer = LogAnalyzer(file_path)
+
+    return {
+        "summary": analyzer.get_summary(),
+        "report": analyzer.generate_nlp_report()
+    }
