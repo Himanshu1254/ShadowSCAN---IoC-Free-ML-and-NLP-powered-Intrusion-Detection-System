@@ -15,42 +15,56 @@ class SessionLogger:
 
         self.disabled = False
 
-        # Main logs folder
-        self.base_dir = os.path.join(os.getcwd(), "captured_logs")
+        # 🔥 FIXED BASE PATH (always project root)
+        self.base_dir = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "captured_logs")
+        )
         os.makedirs(self.base_dir, exist_ok=True)
 
-        # Interval logic
-        interval = self.config.get("interval", "session")
+        interval = self.config.get("interval", "hourly")
 
-        if interval == "hourly":
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H")
-        elif interval == "daily":
-            timestamp = datetime.now().strftime("%Y-%m-%d")
-        else:
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        # 🔥 SMART FOLDER REUSE
+        self.session_dir = self.get_or_create_folder(interval)
 
-        unique_id = str(uuid.uuid4())[:4]
-
-        self.session_dir = os.path.join(
-            self.base_dir,
-            f"{timestamp}_session_{unique_id}_logs"
-        )
-
-        os.makedirs(self.session_dir, exist_ok=True)
-
-        # File paths
         self.alerts_file = os.path.join(self.session_dir, "alerts.csv")
         self.sessions_file = os.path.join(self.session_dir, "sessions.csv")
         self.flows_file = os.path.join(self.session_dir, "flows.csv")
 
-        self.init_files()
+        # Create headers only once
+        if not os.path.exists(self.alerts_file):
+            self.init_files()
 
     def load_config(self):
         try:
             with open("config/logging_config.json", "r") as f:
                 return json.load(f)
         except:
-            return {"enabled": True, "interval": "session"}
+            return {"enabled": True, "interval": "hourly"}
+
+    # 🔥 CORE LOGIC (IMPORTANT)
+    def get_or_create_folder(self, interval):
+        now = datetime.now()
+
+        if interval == "hourly":
+            key = now.strftime("%Y-%m-%d_%H")
+        elif interval == "daily":
+            key = now.strftime("%Y-%m-%d")
+        else:
+            key = now.strftime("%Y-%m-%d_%H-%M-%S")
+
+        # Try reuse existing folder
+        for folder in os.listdir(self.base_dir):
+            if key in folder:
+                return os.path.join(self.base_dir, folder)
+
+        # Else create new
+        unique_id = str(uuid.uuid4())[:4]
+        folder_name = f"{key}_session_{unique_id}_logs"
+
+        path = os.path.join(self.base_dir, folder_name)
+        os.makedirs(path, exist_ok=True)
+
+        return path
 
     def init_files(self):
         with open(self.alerts_file, "w", newline="") as f:
