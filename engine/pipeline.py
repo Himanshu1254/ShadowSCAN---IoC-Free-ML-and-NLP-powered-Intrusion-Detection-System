@@ -5,6 +5,7 @@ from engine.network.live_capture import LiveCapture
 from features.flow_builder import FlowBuilder
 from features.session_builder import SessionBuilder
 from shadow_logging.logger import SessionLogger
+from shadow_logging.geoip import GeoIP
 
 
 class Pipeline:
@@ -39,6 +40,7 @@ class Pipeline:
         self.flow_builder = FlowBuilder()
         self.session_builder = SessionBuilder()
         self.logger = SessionLogger()
+        self.geoip = GeoIP()
 
     def run_once(self):
         raw_packets = self.reader.read()
@@ -64,6 +66,8 @@ class Pipeline:
         alerts = []
 
         for s in sessions:
+            country = self.geoip.get_country(s.get("src_ip"))
+
             alerts.append({
                 "type": "Suspicious Activity",
                 "src_ip": s.get("src_ip"),
@@ -72,10 +76,11 @@ class Pipeline:
                 "severity": "LOW",
                 "confidence": "50%",
                 "attack_type": "Unusual Access",
-                "reason": "Detected unusual network behavior"
+                "reason": "Detected unusual network behavior",
+                "country": country
             })
 
-        # 🔥 LOGGING
+        # logging
         self.logger.log_flows(flows)
         self.logger.log_sessions(sessions)
         self.logger.log_alerts(alerts)

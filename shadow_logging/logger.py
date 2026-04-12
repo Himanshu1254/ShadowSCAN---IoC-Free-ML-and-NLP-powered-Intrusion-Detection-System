@@ -71,7 +71,7 @@ class SessionLogger:
             writer = csv.writer(f)
             writer.writerow([
                 "timestamp","src_ip","dst_ip","protocol",
-                "severity","confidence","attack_type","reason"
+                "severity","confidence","attack_type","reason","country"
             ])
 
         with open(self.sessions_file, "w", newline="") as f:
@@ -107,6 +107,7 @@ class SessionLogger:
                     a.get("confidence"),
                     a.get("attack_type"),
                     a.get("reason"),
+                    a.get("country"),
                 ])
 
     def log_sessions(self, sessions):
