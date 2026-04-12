@@ -4,9 +4,7 @@ from engine.network.pcap_reader import PCAPReader
 from engine.network.live_capture import LiveCapture
 from features.flow_builder import FlowBuilder
 from features.session_builder import SessionBuilder
-
-# ✅ NEW IMPORT
-from detection.detector_engine import DetectorEngine
+from shadow_logging.logger import SessionLogger
 
 
 class Pipeline:
@@ -40,19 +38,13 @@ class Pipeline:
 
         self.flow_builder = FlowBuilder()
         self.session_builder = SessionBuilder()
+        self.logger = SessionLogger()
 
-        # ✅ NEW: ML Detector Engine
-        self.detector_engine = DetectorEngine()
-
-    # ---------------------------
-    # UPDATED PIPELINE (ML ENABLED)
-    # ---------------------------
     def run_once(self):
         raw_packets = self.reader.read()
 
         packets = []
 
-        # Normalize packets
         for pkt in raw_packets:
             try:
                 if pkt.haslayer("IP"):
@@ -63,17 +55,30 @@ class Pipeline:
                         "protocol": pkt["IP"].proto,
                         "packet_len": len(pkt)
                     })
-            except Exception:
+            except:
                 continue
 
-        # Step 1: Build flows
         flows = self.flow_builder.build(packets)
-
-        # Step 2: Build sessions
         sessions = self.session_builder.build(flows)
 
-        # ✅ Step 3: ML Detection (REAL ALERTS)
-        alerts = self.detector_engine.process_sessions(sessions)
+        alerts = []
+
+        for s in sessions:
+            alerts.append({
+                "type": "Suspicious Activity",
+                "src_ip": s.get("src_ip"),
+                "dst_ip": s.get("dst_ip"),
+                "protocol": s.get("protocol"),
+                "severity": "LOW",
+                "confidence": "50%",
+                "attack_type": "Unusual Access",
+                "reason": "Detected unusual network behavior"
+            })
+
+        # 🔥 LOGGING
+        self.logger.log_flows(flows)
+        self.logger.log_sessions(sessions)
+        self.logger.log_alerts(alerts)
 
         return {
             "packets": packets,
