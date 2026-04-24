@@ -34,6 +34,8 @@ nmap -T5 -p- 127.0.0.1
 
 
 
+
+
 🧪 Debug / Development Flow
 
 # always first
@@ -43,3 +45,19 @@ git pull
 git add .
 git commit -m "your update"
 git push
+
+
+
+
+
+
+
+
+▶️ One-Time Setup
+
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+
+cd ui
+npm install
