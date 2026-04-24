@@ -9,6 +9,7 @@ from metrics import set_counts, snapshot
 
 app = FastAPI()
 
+# ✅ CORS (frontend communication)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,54 +18,63 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-pipeline = Pipeline()
-
-# -------------------------------
-# BACKGROUND LOOP
-# -------------------------------
-@app.get("/run")
-def run_pipeline():
-    result = pipeline.run_once()
-    state.update(result)
-
-    set_counts(
-        packets=len(result["packets"]),
-        flows=len(result["flows"]),
-        sessions=len(result["sessions"]),
-        alerts=len(result["alerts"]),
-    )
-
-    return {"status": "pipeline executed"}
+# ✅ Initialize pipeline
+pipeline = Pipeline(mode="live", interface="Wi-Fi")
 
 
+# 🔥 MAIN BACKGROUND LOOP (FIXED + STABLE)
 def pipeline_loop():
+    print("🚀 Pipeline thread started...")
+
     while True:
-        result = pipeline.run_once()
-        state.update(result)
+        try:
+            result = pipeline.run_once()
 
-        set_counts(
-            packets=len(result["packets"]),
-            flows=len(result["flows"]),
-            sessions=len(result["sessions"]),
-            alerts=len(result["alerts"]),
-        )
+            # Debug logs (IMPORTANT)
+            print("📦 Packets:", len(result["packets"]))
+            print("🌊 Flows:", len(result["flows"]))
+            print("🧩 Sessions:", len(result["sessions"]))
+            print("🚨 Alerts:", len(result["alerts"]))
 
-        time.sleep(5)  # run every 5 seconds
+            # ✅ Update shared state
+            state.update(result)
+
+            # ✅ Update metrics
+            set_counts(
+                packets=len(result["packets"]),
+                flows=len(result["flows"]),
+                sessions=len(result["sessions"]),
+                alerts=len(result["alerts"]),
+            )
+
+        except Exception as e:
+            print("❌ Pipeline Error:", e)
+
+        time.sleep(3)  # refresh rate
 
 
+# ✅ Start thread on app startup
 @app.on_event("startup")
 def start_pipeline():
     thread = threading.Thread(target=pipeline_loop, daemon=True)
     thread.start()
 
 
-# -------------------------------
-# ROUTES
-# -------------------------------
+# ---------------- API ROUTES ---------------- #
+
+@app.get("/")
+def root():
+    return {"status": "ShadowSCAN running"}
+
 
 @app.get("/overview/stats")
 def overview_stats():
     return snapshot()
+
+
+@app.get("/alerts")
+def get_alerts():
+    return state.alerts
 
 
 @app.get("/flows")
@@ -77,6 +87,13 @@ def get_sessions():
     return state.sessions
 
 
-@app.get("/alerts")
-def get_alerts():
-    return state.alerts
+# 🔥 DEBUG ROUTE (VERY USEFUL)
+@app.get("/test")
+def test_pipeline():
+    result = pipeline.run_once()
+    return {
+        "packets": len(result["packets"]),
+        "flows": len(result["flows"]),
+        "sessions": len(result["sessions"]),
+        "alerts": len(result["alerts"]),
+    }
