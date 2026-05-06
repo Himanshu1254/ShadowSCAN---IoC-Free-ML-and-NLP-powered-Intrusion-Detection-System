@@ -1,11 +1,13 @@
 from detection.ml_model import MLModel
 from config.config_loader import load_detection_config
+from notifications.windows_notifier import WindowsNotifier
+
 
 class DetectorEngine:
     def __init__(self):
 
         self.config = load_detection_config()
-
+        self.notifier = WindowsNotifier()
         self.thresholds = self.config.get(
             "thresholds",
             {}
@@ -84,7 +86,7 @@ class DetectorEngine:
     # -------------------------------
     def process(self, sessions):
         alerts = []
-
+       
         # 🔥 TRAIN ONCE
         if not self.trained:
             print("[ML] Training model...")
@@ -123,5 +125,15 @@ class DetectorEngine:
                     "attack_type": final_attack,
                     "reason": reason,
                 })
+                # 🔥 SEND WINDOWS NOTIFICATION
+                if self.get_severity(final_attack) in [
+                    "MEDIUM",
+                    "HIGH"
+                ]:
 
+                    self.notifier.send_alert(
+                        alerts[-1]
+                    )
+
+                    
         return alerts
