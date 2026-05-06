@@ -1,11 +1,11 @@
 from detection.ml_model import MLModel
 from config.config_loader import load_detection_config
 from notifications.windows_notifier import WindowsNotifier
-
+from shadow_logging.geoip import GeoLocator
 
 class DetectorEngine:
     def __init__(self):
-
+        
         self.config = load_detection_config()
         self.notifier = WindowsNotifier()
         self.thresholds = self.config.get(
@@ -14,7 +14,7 @@ class DetectorEngine:
         )
 
         self.ml = MLModel()
-
+        self.geo = GeoLocator()
         self.trained = self.ml.load()
 
     # -------------------------------
@@ -113,7 +113,10 @@ class DetectorEngine:
                     if ml_result["anomaly"] and attack_type == "Normal"
                     else attack_type
                 )
-
+                
+                country = self.geo.get_country(
+                    s.get("src_ip", "")
+                )
                 alerts.append({
                     "src_ip": s.get("src_ip"),
                     "dst_ip": s.get("dst_ip"),
@@ -121,7 +124,7 @@ class DetectorEngine:
 
                     "severity": self.get_severity(final_attack),
                     "confidence": confidence,
-
+                    "country": country,
                     "attack_type": final_attack,
                     "reason": reason,
                 })
