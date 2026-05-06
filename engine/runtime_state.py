@@ -1,27 +1,72 @@
+from config.config_loader import load_detection_config
+
 class RuntimeState:
+
     def __init__(self):
-        self.packets = []
+
+        self.config = load_detection_config()
+
+        self.max_items = self.config.get(
+            "max_runtime_items",
+            200
+        )
+
+        self.alerts = []
         self.flows = []
         self.sessions = []
-        self.alerts = []
+
+    # --------------------------------------------------
 
     def update(self, result):
-        # Always update latest snapshots
-        self.packets = result.get("packets", [])
-        self.flows = result.get("flows", [])
-        self.sessions = result.get("sessions", [])
 
-        # 🔥 IMPORTANT: Append alerts instead of replacing
-        new_alerts = result.get("alerts", [])
+        MAX_ITEMS = self.max_items
 
-        for alert in new_alerts:
-            # Prevent duplicates (simple check)
-            if alert not in self.alerts:
+        # --------------------------------------------------
+        # ALERT DEDUPLICATION
+        # --------------------------------------------------
+
+        existing_alerts = {
+            (
+                a.get("src_ip"),
+                a.get("dst_ip"),
+                a.get("attack_type")
+            )
+
+            for a in self.alerts
+        }
+
+        for alert in result.get("alerts", []):
+
+            key = (
+                alert.get("src_ip"),
+                alert.get("dst_ip"),
+                alert.get("attack_type")
+            )
+
+            if key not in existing_alerts:
+
                 self.alerts.append(alert)
 
-        # Optional: keep last 100 alerts only
-        self.alerts = self.alerts[-100:]
+    # --------------------------------------------------
+
+        self.flows.extend(
+            result.get("flows", [])
+        )
+
+        self.sessions.extend(
+            result.get("sessions", [])
+        )
+
+        # --------------------------------------------------
+        # MEMORY CAPS
+        # --------------------------------------------------
+
+        self.alerts = self.alerts[-MAX_ITEMS:]
+
+        self.flows = self.flows[-MAX_ITEMS:]
+
+        self.sessions = self.sessions[-MAX_ITEMS:]
 
 
-# Global state instance
+# 🔥 GLOBAL RUNTIME STATE INSTANCE
 state = RuntimeState()

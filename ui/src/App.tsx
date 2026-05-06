@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Login from "./Login";
 import {
   PieChart, Pie, Cell,
@@ -25,17 +25,55 @@ function App() {
     HIGH: "#ff4d4d"
   };
 
-  const fetchData = async () => {
-    if (!systemOn) return;
+  const [backendOnline, setBackendOnline] = useState(true);
 
-    const statsRes = await fetch("http://127.0.0.1:8000/overview/stats");
+const fetchData = async () => {
+
+  if (!systemOn) return;
+
+  try {
+
+    // 🔥 HEALTH CHECK
+    const healthRes = await fetch(
+      "http://127.0.0.1:8000/health"
+    );
+
+    if (!healthRes.ok) {
+      throw new Error("Backend offline");
+    }
+
+    setBackendOnline(true);
+
+    // 🔥 STATS
+    const statsRes = await fetch(
+      "http://127.0.0.1:8000/overview/stats"
+    );
+
     const statsData = await statsRes.json();
+
     setStats(statsData);
 
-    const alertsRes = await fetch("http://127.0.0.1:8000/alerts");
+    // 🔥 ALERTS
+    const alertsRes = await fetch(
+      "http://127.0.0.1:8000/alerts"
+    );
+
     const alertsData = await alertsRes.json();
-    setAlerts(alertsData);
-  };
+
+    // 🔥 LIMIT FRONTEND MEMORY
+    setAlerts(
+      alertsData.slice(-100)
+    );
+
+  } catch (err) {
+
+    console.log(
+      "⚠ Backend unavailable"
+    );
+
+    setBackendOnline(false);
+  }
+};
 
   useEffect(() => {
     if (!systemOn) {
@@ -55,7 +93,7 @@ function App() {
 
   /* ANALYTICS */
 
-  const protocolData = Object.values(
+  const protocolData = useMemo(() => Object.values(
     alerts.reduce((acc: any, a: any) => {
       const key = a.protocol;
       acc[key] = acc[key] || { name: `Proto ${key}`, value: 0 };
@@ -97,10 +135,21 @@ function App() {
               width: "10px",
               height: "10px",
               borderRadius: "50%",
-              background: systemOn ? "#00ff00" : "#ff4d4d",
+              background:
+  !systemOn
+    ? "#ff4d4d"
+    : backendOnline
+      ? "#00ff00"
+      : "#ffaa00",
               animation: systemOn ? "blink 1s infinite" : "none"
             }} />
-            {systemOn ? "LIVE" : "OFFLINE"}
+            {
+  systemOn
+    ? backendOnline
+      ? "LIVE"
+      : "RECONNECTING..."
+    : "OFFLINE"
+}
           </div>
 
           <button

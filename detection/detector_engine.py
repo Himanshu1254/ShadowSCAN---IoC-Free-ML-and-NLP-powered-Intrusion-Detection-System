@@ -1,9 +1,18 @@
 from detection.ml_model import MLModel
-
+from config.config_loader import load_detection_config
 
 class DetectorEngine:
     def __init__(self):
+
+        self.config = load_detection_config()
+
+        self.thresholds = self.config.get(
+            "thresholds",
+            {}
+        )
+
         self.ml = MLModel()
+
         self.trained = self.ml.load()
 
     # -------------------------------

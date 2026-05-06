@@ -1,0 +1,20 @@
+{
+  "packet_limit": 100,
+
+  "max_runtime_items": 200,
+
+  "frontend_poll_interval": 3000,
+
+  "ml": {
+    "contamination": 0.1,
+    "random_state": 42
+  },
+
+  "thresholds": {
+    "port_scan_flows": 25,
+    "traffic_flood_packets": 700,
+    "burst_duration": 0.5,
+    "burst_packets": 150,
+    "suspicious_flows": 10
+  }
+}
