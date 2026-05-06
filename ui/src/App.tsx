@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Login from "./Login";
 import {
   PieChart,
@@ -121,77 +121,68 @@ function App() {
   // ANALYTICS
   // --------------------------------------------------
 
-  const protocolData = useMemo(() =>
+  const protocolData = Object.values(
 
-    Object.values(
+  alerts.reduce((acc: any, a: any) => {
 
-      alerts.reduce((acc: any, a: any) => {
+    const protocol = a.protocol || "Unknown";
 
-        const protocol = a.protocol || "Unknown";
+    acc[protocol] = acc[protocol] || {
+      name: protocol,
+      value: 0
+    };
 
-        acc[protocol] = acc[protocol] || {
-          name: protocol,
-          value: 0
-        };
+    acc[protocol].value += 1;
 
-        acc[protocol].value += 1;
+    return acc;
 
-        return acc;
+  }, {})
 
-      }, {})
+);
 
-    ),
 
-  [alerts]);
+const severityData = Object.values(
 
-  const severityData = useMemo(() =>
+  alerts.reduce((acc: any, a: any) => {
 
-    Object.values(
+    const severity = a.severity || "LOW";
 
-      alerts.reduce((acc: any, a: any) => {
+    acc[severity] = acc[severity] || {
+      name: severity,
+      value: 0
+    };
 
-        const severity = a.severity || "LOW";
+    acc[severity].value += 1;
 
-        acc[severity] = acc[severity] || {
-          name: severity,
-          value: 0
-        };
+    return acc;
 
-        acc[severity].value += 1;
+  }, {})
 
-        return acc;
+);
 
-      }, {})
 
-    ),
+const topIPs = Object.values(
 
-  [alerts]);
+  alerts.reduce((acc: any, a: any) => {
 
-  const topIPs = useMemo(() =>
+    const ip = a.src_ip || "Unknown";
 
-    Object.values(
+    acc[ip] = acc[ip] || {
+      ip: ip,
+      count: 0
+    };
 
-      alerts.reduce((acc: any, a: any) => {
+    acc[ip].count += 1;
 
-        const ip = a.src_ip || "Unknown";
+    return acc;
 
-        acc[ip] = acc[ip] || {
-          ip: ip,
-          count: 0
-        };
+  }, {})
 
-        acc[ip].count += 1;
+)
 
-        return acc;
+.sort((a: any, b: any) => b.count - a.count)
 
-      }, {})
-
-    )
-
-      .sort((a: any, b: any) => b.count - a.count)
-      .slice(0, 5),
-
-  [alerts]);
+.slice(0, 5);
 
   // --------------------------------------------------
 

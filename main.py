@@ -4,6 +4,8 @@ import threading
 import time
 import os
 
+
+from nlp.analyzer import NLPAnalyzer
 from engine.pipeline import Pipeline
 from engine.runtime_state import state
 from metrics import set_counts, snapshot
@@ -21,7 +23,7 @@ app.add_middleware(
 
 # ✅ Initialize pipeline
 pipeline = Pipeline(mode="live", interface="Wi-Fi")
-
+nlp = NLPAnalyzer()
 
 # 🔥 MAIN BACKGROUND LOOP (FIXED + STABLE)
 def pipeline_loop():
@@ -130,3 +132,22 @@ def health_check():
 
         "alerts_active": len(state.alerts) > 0
     }
+
+@app.post("/analyze_logs")
+async def analyze_logs():
+
+    latest_folder = sorted(
+        os.listdir("captured_logs")
+    )[-1]
+
+    alerts_path = os.path.join(
+        "captured_logs",
+        latest_folder,
+        "alerts.csv"
+    )
+
+    result = nlp.analyze(
+        alerts_path
+    )
+
+    return result
