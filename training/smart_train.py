@@ -86,6 +86,11 @@ class SmartDatasetTrainer:
         print(
             f"[DATASET] Rows: {len(df)}"
         )
+        print("\n[COLUMNS]\n")
+
+        for col in df.columns:
+
+            print(col)
 
         return df
 
@@ -206,25 +211,160 @@ class SmartDatasetTrainer:
             df
         )
 
-        # REMOVE LABEL COLUMN
-        feature_columns = [
+        # --------------------------------------------------
+        # SAFE COLUMN FETCHER
+        # --------------------------------------------------
 
-            c for c in df.columns
+        def get_col(name, default=0):
 
-            if c != label_col
-        ]
+            if name in df.columns:
 
-        # KEEP ONLY NUMERIC FEATURES
-        numeric_df = df[
-            feature_columns
-        ].select_dtypes(
-            include=[np.number]
+                return pd.to_numeric(
+
+                    df[name],
+
+                    errors="coerce"
+
+                ).fillna(default)
+
+            return pd.Series(
+                [default] * len(df)
+            )
+
+        # --------------------------------------------------
+        # REAL DATASET COLUMNS
+        # --------------------------------------------------
+
+        fwd_packets = get_col(
+            "total_fwd_packets"
         )
 
-        # FILL NULLS
-        X = numeric_df.fillna(0)
+        bwd_packets = get_col(
+            "total_backward_packets"
+        )
 
-        # LABEL ENCODING
+        fwd_bytes = get_col(
+            "total_length_of_fwd_packets"
+        )
+
+        bwd_bytes = get_col(
+            "total_length_of_bwd_packets"
+        )
+
+        duration = get_col(
+            "flow_duration",
+            1
+        )
+
+        dst_port = get_col(
+            "unnamed: 0"
+        )
+
+        flow_count = get_col(
+            "subflow_fwd_packets",
+            1
+        )
+
+        # --------------------------------------------------
+        # ENGINEERED FEATURES
+        # --------------------------------------------------
+
+        packet_count = (
+            fwd_packets + bwd_packets
+        )
+
+        byte_count = (
+            fwd_bytes + bwd_bytes
+        )
+
+        duration_safe = duration.replace(
+            0,
+            0.001
+        )
+
+        bytes_per_second = (
+            byte_count / duration_safe
+        )
+
+        packets_per_second = (
+            packet_count / duration_safe
+        )
+
+        avg_packet_size = (
+            byte_count
+            /
+            packet_count.replace(0, 1)
+        )
+
+        flow_density = (
+            flow_count / duration_safe
+        )
+
+        burst_score = (
+            packets_per_second
+            *
+            flow_count
+        )
+
+        port_is_common = dst_port.apply(
+
+            lambda x:
+
+            1
+
+            if x in [
+                80,
+                443,
+                53
+            ]
+
+            else 0
+        )
+
+        # --------------------------------------------------
+        # FINAL FEATURE FRAME
+        # --------------------------------------------------
+
+        X = pd.DataFrame({
+
+            "packet_count":
+                packet_count,
+
+            "byte_count":
+                byte_count,
+
+            "duration":
+                duration,
+
+            "flow_count":
+                flow_count,
+
+            "dst_port":
+                dst_port,
+
+            "bytes_per_second":
+                bytes_per_second,
+
+            "packets_per_second":
+                packets_per_second,
+
+            "avg_packet_size":
+                avg_packet_size,
+
+            "flow_density":
+                flow_density,
+
+            "burst_score":
+                burst_score,
+
+            "port_is_common":
+                port_is_common
+        }).fillna(0)
+
+        # --------------------------------------------------
+        # LABELS
+        # --------------------------------------------------
+
         y = df[label_col].apply(
 
             lambda x:
@@ -246,6 +386,8 @@ class SmartDatasetTrainer:
             f"[FEATURES] Features used: "
             f"{len(X.columns)}"
         )
+
+        print(X.head())
 
         return X, y
 
