@@ -1,19 +1,7 @@
 class HybridDecisionEngine:
 
     def decide(
-
-        self,
-
-        heuristic_attack,
-
-        heuristic_reason,
-
-        anomaly_result,
-
-        rf_result,
-
-        xgb_result
-
+        self, heuristic_attack, heuristic_reason, anomaly_result, rf_result, xgb_result
     ):
 
         # --------------------------------------------------
@@ -22,20 +10,14 @@ class HybridDecisionEngine:
 
         if (
             xgb_result is not None
-            and xgb_result["prediction"] == 1
-            and xgb_result["confidence"] > 0.90
+            and xgb_result.get("is_attack", False)
+            and xgb_result.get("confidence", 0.0) > 0.90
         ):
 
             return {
-
-                "attack":
-                    "ML Attack Detected",
-
-                "source":
-                    "XGBoost",
-
-                "confidence":
-                    xgb_result["confidence"]
+                "attack": xgb_result.get("prediction", "ML Attack Detected"),
+                "source": "XGBoost",
+                "confidence": xgb_result["confidence"],
             }
 
         # --------------------------------------------------
@@ -44,20 +26,14 @@ class HybridDecisionEngine:
 
         if (
             rf_result is not None
-            and rf_result["prediction"] == 1
-            and rf_result["confidence"] > 0.90
+            and rf_result.get("is_attack", False)
+            and rf_result.get("confidence", 0.0) > 0.90
         ):
 
             return {
-
-                "attack":
-                    "ML Attack Detected",
-
-                "source":
-                    "RandomForest",
-
-                "confidence":
-                    rf_result["confidence"]
+                "attack": rf_result.get("prediction", "ML Attack Detected"),
+                "source": "RandomForest",
+                "confidence": rf_result["confidence"],
             }
 
         # --------------------------------------------------
@@ -67,47 +43,36 @@ class HybridDecisionEngine:
         if heuristic_attack != "Normal":
 
             return {
-
-                "attack":
-                    heuristic_attack,
-
-                "source":
-                    "Heuristic Engine",
-
-                "confidence":
-                    0.80
+                "attack": heuristic_attack,
+                "source": "Heuristic Engine",
+                "confidence": 0.80,
             }
 
         # --------------------------------------------------
-        # ANOMALY
+        # ANOMALY / BASE ML
         # --------------------------------------------------
 
-        if anomaly_result.get("anomaly"):
+        # Handle the new structured format from ml_model.py
+        if anomaly_result and isinstance(anomaly_result, dict):
 
-            return {
+            if anomaly_result.get("attack_detected"):
 
-                "attack":
-                    "Unknown Anomaly",
+                return {
+                    "attack": anomaly_result.get("attack_type", "Unknown Anomaly"),
+                    "source": "Base ML Pipeline",
+                    "confidence": 0.75,
+                }
 
-                "source":
-                    "IsolationForest",
-
-                "confidence":
-                    0.75
-            }
+            # Legacy fallback for old dictionary structure
+            if anomaly_result.get("anomaly"):
+                return {
+                    "attack": "Unknown Anomaly",
+                    "source": "IsolationForest",
+                    "confidence": 0.75,
+                }
 
         # --------------------------------------------------
         # NORMAL
         # --------------------------------------------------
 
-        return {
-
-            "attack":
-                "Normal",
-
-            "source":
-                "None",
-
-            "confidence":
-                0.0
-        }
+        return {"attack": "Normal", "source": "None", "confidence": 0.0}

@@ -3,17 +3,11 @@ from config.config_loader import load_detection_config
 from notifications.windows_notifier import WindowsNotifier
 from shadow_logging.geoip import GeoLocator
 
-from detection.model_manager import (
-    ModelManager
-)
+from detection.model_manager import ModelManager
 
-from detection.explainability import (
-    ExplainabilityEngine
-)
+from detection.explainability import ExplainabilityEngine
 
-from detection.decision_engine import (
-    HybridDecisionEngine
-)
+from detection.decision_engine import HybridDecisionEngine
 
 
 class DetectorEngine:
@@ -22,32 +16,25 @@ class DetectorEngine:
 
         self.config = load_detection_config()
 
-        self.notifier = (
-            WindowsNotifier()
-        )
+        self.notifier = WindowsNotifier()
 
-        self.thresholds = self.config.get(
-            "thresholds",
-            {}
-        )
+        self.thresholds = self.config.get("thresholds", {})
 
         self.ml = MLModel()
 
-        self.model_manager = (
-            ModelManager()
-        )
+        self.model_manager = ModelManager()
 
-        self.explainer = (
-            ExplainabilityEngine()
-        )
+        self.explainer = ExplainabilityEngine()
 
-        self.decision_engine = (
-            HybridDecisionEngine()
-        )
+        self.decision_engine = HybridDecisionEngine()
 
         self.geo = GeoLocator()
 
-        self.trained = self.ml.load()
+        # Safe architectural bridge check for load capability
+        if hasattr(self.ml, "load"):
+            self.trained = self.ml.load()
+        else:
+            self.trained = getattr(self.ml, "is_ready", True)
 
     # --------------------------------------------------
     # RULE ENGINE
@@ -55,111 +42,50 @@ class DetectorEngine:
 
     def classify_attack(self, session):
 
-        flow_count = session.get(
-            "flow_count",
-            0
-        )
+        flow_count = session.get("flow_count", 0)
 
-        packet_count = session.get(
-            "packet_count",
-            0
-        )
+        packet_count = session.get("packet_count", 0)
 
-        dst_port = session.get(
-            "dst_port",
-            0
-        )
+        dst_port = session.get("dst_port", 0)
 
-        duration = session.get(
-            "duration",
-            1
-        )
+        duration = session.get("duration", 1)
 
         if flow_count > 25:
 
-            return (
-
-                "Port Scan",
-
-                "Multiple rapid connection attempts"
-            )
+            return ("Port Scan", "Multiple rapid connection attempts")
 
         if packet_count > 700:
 
-            return (
-
-                "Traffic Flood",
-
-                "Very high packet volume detected"
-            )
+            return ("Traffic Flood", "Very high packet volume detected")
 
         if duration < 0.5 and packet_count > 150:
 
-            return (
-
-                "Burst Traffic",
-
-                "Sudden spike in packets"
-            )
+            return ("Burst Traffic", "Sudden spike in packets")
 
         if flow_count > 10:
 
-            return (
+            return ("Suspicious Activity", "Unusual number of flows")
 
-                "Suspicious Activity",
+        if dst_port not in [80, 443, 53] and packet_count > 20:
 
-                "Unusual number of flows"
-            )
+            return ("Unusual Access", "Access to uncommon port")
 
-        if dst_port not in [
-
-            80,
-            443,
-            53
-
-        ] and packet_count > 20:
-
-            return (
-
-                "Unusual Access",
-
-                "Access to uncommon port"
-            )
-
-        return (
-
-            "Normal",
-
-            "No anomaly detected"
-        )
+        return ("Normal", "No anomaly detected")
 
     # --------------------------------------------------
     # SEVERITY
     # --------------------------------------------------
 
     def get_severity(self, attack_type):
+        if not attack_type or attack_type == "Normal":
+            return "LOW"
 
-        if attack_type in [
-
-            "Port Scan",
-            "Traffic Flood",
-            "ML Attack Detected"
-
-        ]:
-
-            return "HIGH"
-
-        if attack_type in [
-
-            "Burst Traffic",
-            "Suspicious Activity",
-            "Unknown Anomaly"
-
-        ]:
-
+        # Explicit mediums
+        if attack_type in ["Burst Traffic", "Suspicious Activity", "Unknown Anomaly"]:
             return "MEDIUM"
 
-        return "LOW"
+        # Dynamically map all verified multiclass attack categories as HIGH severity
+        return "HIGH"
 
     # --------------------------------------------------
     # MAIN PROCESS
@@ -173,11 +99,10 @@ class DetectorEngine:
 
         if not self.trained:
 
-            print(
-                "[ML] Training model..."
-            )
+            print("[ML] Training model...")
 
-            self.ml.train(sessions)
+            if hasattr(self.ml, "train"):
+                self.ml.train(sessions)
 
             self.trained = True
 
@@ -190,7 +115,7 @@ class DetectorEngine:
             try:
 
                 # --------------------------
-                # IsolationForest
+                # IsolationForest / Base ML Engine
                 # --------------------------
 
                 ml_result = self.ml.predict(s)
@@ -199,48 +124,26 @@ class DetectorEngine:
                 # Supervised Models
                 # --------------------------
 
-                rf_result = (
-                    self.model_manager
-                    .predict_rf(s)
-                )
+                rf_result = self.model_manager.predict_rf(s)
 
-                xgb_result = (
-                    self.model_manager
-                    .predict_xgb(s)
-                )
+                xgb_result = self.model_manager.predict_xgb(s)
 
                 # --------------------------
                 # Heuristics
                 # --------------------------
 
-                attack_type, reason = (
-
-                    self.classify_attack(s)
-                )
+                attack_type, reason = self.classify_attack(s)
 
                 # --------------------------
                 # Hybrid Decision
                 # --------------------------
 
-                decision = (
-
-                    self.decision_engine.decide(
-
-                        heuristic_attack=
-                        attack_type,
-
-                        heuristic_reason=
-                        reason,
-
-                        anomaly_result=
-                        ml_result,
-
-                        rf_result=
-                        rf_result,
-
-                        xgb_result=
-                        xgb_result
-                    )
+                decision = self.decision_engine.decide(
+                    heuristic_attack=attack_type,
+                    heuristic_reason=reason,
+                    anomaly_result=ml_result,
+                    rf_result=rf_result,
+                    xgb_result=xgb_result,
                 )
 
                 # --------------------------------------------------
@@ -253,91 +156,43 @@ class DetectorEngine:
                 # EXPLAINABILITY
                 # --------------------------------------------------
 
-                explanations = (
-
-                    self.explainer.explain(s)
-                )
+                explanations = self.explainer.explain(s)
 
                 # --------------------------------------------------
                 # SAFE CONFIDENCE
                 # --------------------------------------------------
 
-                raw_confidence = decision.get(
-                    "confidence",
-                    0.0
-                )
+                raw_confidence = decision.get("confidence", 0.0)
 
-                if isinstance(
-                    raw_confidence,
-                    dict
-                ):
+                if isinstance(raw_confidence, dict):
 
                     raw_confidence = 0.0
 
-                if isinstance(
-                    raw_confidence,
-                    str
-                ):
+                if isinstance(raw_confidence, str):
 
-                    raw_confidence = (
-                        raw_confidence
-                        .replace("%", "")
-                    )
+                    raw_confidence = raw_confidence.replace("%", "")
 
-                    raw_confidence = (
-                        float(raw_confidence)
-                        / 100
-                    )
+                    raw_confidence = float(raw_confidence) / 100
 
-                confidence = int(
-                    float(raw_confidence)
-                    * 100
-                )
+                confidence = int(float(raw_confidence) * 100)
 
                 # --------------------------------------------------
 
-                country = self.geo.get_country(
-
-                    s.get("src_ip", "")
-                )
+                country = self.geo.get_country(s.get("src_ip", ""))
 
                 # --------------------------------------------------
 
                 alert = {
-
-                    "src_ip":
-                        s.get("src_ip"),
-
-                    "dst_ip":
-                        s.get("dst_ip"),
-
-                    "protocol":
-                        s.get("protocol"),
-
-                    "country":
-                        country,
-
-                    "severity":
-                        self.get_severity(
-                            decision["attack"]
-                        ),
-
-                    "confidence":
-                        f"{confidence}%",
-
-                    "attack_type":
-                        decision["attack"],
-
-                    "detected_by":
-                        decision["source"],
-
-                    "reasons":
-                        explanations,
-
-                    "reason":
-                        ", ".join(
-                            explanations
-                        )
+                    "src_ip": s.get("src_ip"),
+                    "dst_ip": s.get("dst_ip"),
+                    "protocol": s.get("protocol"),
+                    "country": country,
+                    "severity": self.get_severity(decision["attack"]),
+                    "confidence": f"{confidence}%",
+                    "attack_type": decision["attack"],
+                    "detected_by": decision["source"],
+                    "reasons": explanations,
+                    "reason": ", ".join(explanations),
                 }
 
                 # --------------------------------------------------
@@ -348,22 +203,13 @@ class DetectorEngine:
                 # WINDOWS NOTIFICATIONS
                 # --------------------------------------------------
 
-                if alert["severity"] in [
+                if alert["severity"] in ["HIGH", "MEDIUM"]:
 
-                    "HIGH",
-                    "MEDIUM"
-
-                ]:
-
-                    self.notifier.send_alert(
-                        alert
-                    )
+                    self.notifier.send_alert(alert)
 
             except Exception as e:
 
-                print(
-                    "[DETECTION ERROR]"
-                )
+                print("[DETECTION ERROR]")
 
                 print(e)
 
