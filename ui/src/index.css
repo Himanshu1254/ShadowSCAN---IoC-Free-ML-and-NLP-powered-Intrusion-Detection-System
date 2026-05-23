@@ -1,34 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Iceland&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+
+  /* Forces the font and adds a slight letter spacing for that terminal HUD look */
+  * {
+    font-family: 'Iceland', sans-serif !important;
+    letter-spacing: 0.05em;
+  }
+
   body {
-    @apply bg-[#050505] text-neutral-200 antialiased selection:bg-orange-500/20 selection:text-orange-500;
+    /* Merged the Deep Terminal Black and Hacker Green into Tailwind logic */
+    @apply bg-[#050505] text-[#00ff00] antialiased selection:bg-orange-500/20 selection:text-orange-500;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
   }
 }
 
-/* Custom scrollbar for dark theme */
+/* ----------------------------------------- */
+/* CUSTOM SCROLLBAR FOR DARK THEME           */
+/* ----------------------------------------- */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0a0a0a; 
+  background: #0a0a0a;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #262626; 
+  background: #262626;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #404040; 
+  background: #404040;
 }
 
-/* Recharts overrides */
+/* ----------------------------------------- */
+/* RECHARTS OVERRIDES                        */
+/* ----------------------------------------- */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
   stroke: #262626;
+}
+
+/* Add to your existing layout file */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
