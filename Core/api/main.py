@@ -1,10 +1,12 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import threading
 import time
 import shutil
 import os
-import requests
+import httpx
+import asyncio
 
 # --- NIDS IMPORTS ---
 from NIDS.engine.pipeline import Pipeline
@@ -22,9 +24,7 @@ from HIDS.trackers.disk_tracker import get_disk_telemetry
 from HIDS.trackers.service_tracker import get_active_services
 from HIDS.trackers.gpu_tracker import get_gpu_telemetry
 from HIDS.trackers.cpu_ram_tracker import get_cpu_ram_telemetry
-from HIDS.fim_scanner import start_fim_engine, fim_alerts
-from HIDS.process_scanner import get_suspicious_processes  # <-- NEW IMPORT
-
+from HIDS.process_scanner import get_suspicious_processes
 
 # -------------------------------------------------
 # FastAPI App & Global Instantiations
@@ -45,54 +45,97 @@ geo_locator = GeoLocator()
 
 
 # -------------------------------------------------
-# OLLAMA COGNITIVE AI LOGIC (PAUSED/FALLBACK)
-# -------------------------------------------------
-# -------------------------------------------------
 # OLLAMA COGNITIVE AI LOGIC & MEMORY CACHE
 # -------------------------------------------------
 ai_reasoning_cache = {}
+OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
+ACTIVE_MODEL = "llama3"
 
 
-def generate_ai_reasoning(
-    attack_type: str, severity: str, src_ip: str, dst_port: int, protocol: str
+async def generate_ai_reasoning_async(
+    client: httpx.AsyncClient,
+    attack_type: str,
+    severity: str,
+    src_ip: str,
+    dst_port: int,
+    protocol: str,
 ) -> str:
-    """Queries local Ollama instance and caches the heuristics to prevent server stutter."""
+    """Asynchronously queries local Ollama instance and caches the heuristics."""
     if attack_type.lower() in ["benign", "normal"]:
         return "System telemetry indicates standard structural traffic layout. Regular operational baseline validated."
 
-    # Create a unique mathematical signature for this specific threat vector
     threat_signature = f"{attack_type}_{src_ip}_{dst_port}_{protocol}"
 
-    # If the AI has already analyzed this exact vector, return it from memory instantly
     if threat_signature in ai_reasoning_cache:
         return ai_reasoning_cache[threat_signature]
 
-    url = "http://127.0.0.1:11434/api/generate"
     cyber_prompt = (
         f"You are an expert cybersecurity AI. Analyze this network threat alert in ONE short, professional sentence. "
         f"Threat: {attack_type}, Severity: {severity}, Source IP: {src_ip}, Target Port: {dst_port}, Protocol: {protocol}."
     )
 
     payload = {
-        "model": "llama3",
+        "model": ACTIVE_MODEL,
         "prompt": cyber_prompt,
         "stream": False,
         "options": {"temperature": 0.2},
     }
 
     try:
-        # Increased timeout to 2.5s to give the local LLM time to breathe on first load
-        response = requests.post(url, json=payload, timeout=2.5)
+        response = await client.post(OLLAMA_URL, json=payload, timeout=3.0)
         if response.status_code == 200:
             ai_text = response.json().get("response", "").strip()
-            # Save to memory so we never have to wait for this calculation again
             ai_reasoning_cache[threat_signature] = ai_text
             return ai_text
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[OLLAMA TIMEOUT/ERROR] {e}")
 
-    fallback_text = f"Threat vector [{attack_type}] target signature detected on port {dst_port} utilizing {protocol} layer. High monitoring required."
-    return fallback_text
+    return f"Threat vector [{attack_type}] target signature detected on port {dst_port} utilizing {protocol} layer. High monitoring required."
+
+
+class ThreatAlert(BaseModel):
+    src_ip: str
+    dst_ip: str
+    attack_type: str
+    severity: str
+    raw_payload: str = "N/A"
+
+
+class CognitiveResponse(BaseModel):
+    reasoning: str
+
+
+@app.post("/api/intelligence/analyze", response_model=CognitiveResponse)
+async def analyze_threat(alert: ThreatAlert):
+    """Dedicated endpoint for frontend modal on-demand AI analysis."""
+    cyber_prompt = (
+        f"You are a Senior Cybersecurity Analyst AI embedded in ShadowSCAN. "
+        f"Analyze this intrusion alert and provide a concise, 3-sentence maximum Cognitive Reasoning summary. "
+        f"Source: {alert.src_ip}, Target: {alert.dst_ip}, Class: {alert.attack_type}, Severity: {alert.severity}."
+    )
+    payload = {
+        "model": ACTIVE_MODEL,
+        "prompt": cyber_prompt,
+        "stream": False,
+        "options": {"temperature": 0.2},
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(OLLAMA_URL, json=payload, timeout=60.0)
+            response.raise_for_status()
+            return CognitiveResponse(
+                reasoning=response.json().get("response", "Analysis failed.")
+            )
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=503,
+            detail="Ollama Engine offline. Ensure localhost:11434 is running.",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Intelligence Core Error: {str(e)}"
+        )
 
 
 # -------------------------------------------------
@@ -163,23 +206,19 @@ def test_pipeline():
 
 
 @app.get("/alerts")
-def get_alerts():
-    """Intercepts anomalies and runs them through the local AI parser."""
-    enriched_alerts = []
+async def get_alerts():
+    """Returns alerts with GeoIP and Domains, but defers AI Reasoning."""
     raw_alerts = (
         state.alerts.slice(-100)
         if hasattr(state.alerts, "slice")
         else state.alerts[-100:]
     )
+    enriched_alerts = []
 
     for alert in raw_alerts:
         enriched = dict(alert)
         src_ip = enriched.get("src_ip", "")
         dst_ip = enriched.get("dst_ip", "")
-        attack_type = enriched.get("attack_type", "Unknown Anomaly")
-        severity = enriched.get("severity", "LOW")
-        dst_port = enriched.get("dst_port", 0)
-        protocol = enriched.get("protocol", "TCP")
 
         # Geolocation & Mapping Enrichment
         enriched["country"] = geo_locator.get_country(src_ip)
@@ -187,10 +226,8 @@ def get_alerts():
         enriched["src_domain"] = domain_resolver.resolve(src_ip)
         enriched["dst_domain"] = domain_resolver.resolve(dst_ip)
 
-        # Local Ollama / Fallback Heuristic Reasoning
-        enriched["reason"] = generate_ai_reasoning(
-            attack_type, severity, src_ip, dst_port, protocol
-        )
+        # Set a placeholder for the reason. The frontend will fetch the real one.
+        enriched["reason"] = "AI Analysis Pending... Click to generate."
 
         enriched_alerts.append(enriched)
 
@@ -245,8 +282,6 @@ def get_live_processes():
 # -------------------------------------------------
 # HIDS HARDWARE & SERVICE ENDPOINTS
 # -------------------------------------------------
-
-
 @app.get("/hids/hardware/cpu_ram")
 def api_get_cpu_ram():
     """Returns detailed CPU and RAM usage."""
