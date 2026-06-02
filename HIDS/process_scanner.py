@@ -1,102 +1,73 @@
 import psutil
-import time
-import os
-import json
-from datetime import datetime
-
-
-def log_audit_event(event_type, details):
-    """The permanent historical vault."""
-    os.makedirs("Data", exist_ok=True)
-    log_file = "Data/hids_audit_log.json"
-
-    entry = {
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "type": event_type,
-        "details": details,
-    }
-
-    logs = []
-    if os.path.exists(log_file):
-        try:
-            with open(log_file, "r") as f:
-                logs = json.load(f)
-        except Exception:
-            pass
-
-    logs.append(entry)
-
-    with open(log_file, "w") as f:
-        json.dump(logs[-500:], f, indent=4)
 
 
 def get_suspicious_processes():
+    """
+    Scans the host OS for active processes, sorts by resource usage,
+    and formats them for the ShadowSCAN dashboard.
+    """
     process_list = []
-    cpu_count = psutil.cpu_count(logical=True)
-    whitelist = ["System Idle Process", "System", "Registry", "smss.exe"]
 
-    total_cpu = psutil.cpu_percent(interval=0.1)
-    total_ram = psutil.virtual_memory().percent
+    try:
+        # Iterate over all active PIDs. We use dict() for faster attribute access.
+        for proc in psutil.process_iter(
+            ["pid", "name", "username", "cpu_percent", "memory_percent", "exe"]
+        ):
+            try:
+                pinfo = proc.info
 
-    # Notice we added 'username' to the psutil request
-    for proc in psutil.process_iter(
-        ["pid", "name", "exe", "cpu_percent", "memory_percent", "username"]
-    ):
-        try:
-            info = proc.info
-            name = info.get("name", "") or "UNKNOWN"
-            exe_path = info.get("exe", "") or "[KERNEL RESTRICTED]"
-            user = info.get("username", "") or "UNKNOWN"
+                # Skip idle/system hidden processes that don't use measurable resources
+                # psutil sometimes returns None for cpu/memory if it can't read it
+                cpu_usage = pinfo.get("cpu_percent") or 0.0
+                mem_usage = pinfo.get("memory_percent") or 0.0
 
-            raw_cpu = info.get("cpu_percent", 0.0)
-            cpu = (raw_cpu / cpu_count) if (raw_cpu and cpu_count) else 0.0
-            mem = info.get("memory_percent", 0.0) or 0.0
+                if cpu_usage == 0.0 and mem_usage < 0.1:
+                    continue
 
-            if name in whitelist or info["pid"] == 0:
-                continue
+                # Determine if the process is running with Admin/System privileges
+                user = pinfo.get("username") or "Unknown"
+                is_admin = (
+                    True
+                    if "SYSTEM" in user.upper() or "ADMIN" in user.upper()
+                    else False
+                )
 
-            if name == "UNKNOWN" and cpu < 0.1 and mem < 0.1:
-                continue
+                # Determine a basic status flag based on CPU usage
+                status = "HIGH CPU" if cpu_usage > 30.0 else "NORMAL"
 
-            # Privilege Logic: Identifies core Windows accounts or elevated states
-            is_admin = False
-            if user and ("SYSTEM" in user.upper() or "ADMINISTRATOR" in user.upper()):
-                is_admin = True
+                process_list.append(
+                    {
+                        "pid": pinfo["pid"],
+                        "name": pinfo["name"] or "Unknown Payload",
+                        "path": pinfo["exe"] or "Restricted Ring-0 Memory",
+                        "user": user,
+                        "is_admin": is_admin,
+                        "cpu_usage": round(cpu_usage, 1),
+                        "mem_usage": round(mem_usage, 1),
+                        "status": status,
+                    }
+                )
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                # Ignore processes that close while we are reading them, or that we don't have permission to read
+                pass
 
-            # Dynamic Heuristics
-            status = "NORMAL"
-            if cpu > 40.0:
-                status = "FLAGGED - High CPU"
-            elif name == "UNKNOWN":
-                status = "FLAGGED - Ghost Thread"
+        # Sort by CPU usage descending and grab the top 25
+        process_list = sorted(process_list, key=lambda x: x["cpu_usage"], reverse=True)[
+            :25
+        ]
 
-            proc_data = {
-                "pid": info["pid"],
-                "name": name,
-                "path": exe_path,
-                "user": user.split("\\")[
-                    -1
-                ],  # Cleans up the formatting (e.g., DESKTOP\Himanshu -> Himanshu)
-                "is_admin": is_admin,
-                "cpu_usage": round(cpu, 2),
-                "mem_usage": round(mem, 2),
-                "status": status,
-            }
-            process_list.append(proc_data)
+        # We also pass the system stats here so the frontend can update the charts simultaneously
+        sys_cpu = psutil.cpu_percent(interval=0.1)
+        sys_ram = psutil.virtual_memory().percent
 
-            # Still logs highly dangerous spikes to the JSON vault
-            if cpu > 85.0 or name == "UNKNOWN":
-                log_audit_event("ANOMALOUS_PROCESS", proc_data)
+        return {
+            "processes": process_list,
+            "system_stats": {
+                "total_cpu": round(sys_cpu, 1),
+                "total_ram": round(sys_ram, 1),
+            },
+        }
 
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            continue
-
-    # Sorts everything by highest resource usage and returns the Top 25 processes
-    sorted_processes = sorted(
-        process_list, key=lambda x: x["cpu_usage"] + x["mem_usage"], reverse=True
-    )[:25]
-
-    return {
-        "system_stats": {"total_cpu": total_cpu, "total_ram": total_ram},
-        "processes": sorted_processes,
-    }
+    except Exception as e:
+        print(f"[HIDS ERROR] Process Scanner Failed: {e}")
+        return {"processes": [], "system_stats": {"total_cpu": 0, "total_ram": 0}}

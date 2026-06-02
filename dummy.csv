@@ -1,0 +1,2 @@
+Timestamp,Source IP Addr,Destination IP,packet_count,byte_count,duration,flow_count,dst_port,bytes_per_second,packets_per_second,avg_packet_size,flow_density,burst_score,port_is_common,threat_class
+2023-10-27 10:00:00,10.0.0.5,8.8.8.8,100,5000,10,1,80,500,10,50,5,10,1,Port Scan
