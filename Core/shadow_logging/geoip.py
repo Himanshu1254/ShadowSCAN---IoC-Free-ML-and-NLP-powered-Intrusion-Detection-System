@@ -83,8 +83,10 @@ class GeoLocator:
             return generate_mock_coords()
 
         try:
+            import time
+            time.sleep(1.1)
             url = "https://nominatim.openstreetmap.org/search"
-            headers = {'User-Agent': 'ShadowSCAN_Security_App_v1.0_Demo'}
+            headers = {'User-Agent': 'ShadowSCAN_Enterprise_Console_v1.0'}
             params = {'q': location, 'format': 'json', 'limit': 1}
             
             res = requests.get(url, headers=headers, params=params, timeout=3)
@@ -96,10 +98,10 @@ class GeoLocator:
                 self.cache[cache_key] = coords
                 return coords
             else:
-                return generate_mock_coords()
+                return "Unknown Location"
                 
         except (requests.exceptions.RequestException, Exception):
-            # Immediately suppress the exception and fall back to mock geolocation coordinates
-            fallback = generate_mock_coords()
+            # Immediately suppress the exception and fall back to a safe string
+            fallback = "Unknown Location"
             self.cache[cache_key] = fallback
             return fallback

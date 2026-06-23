@@ -2,26 +2,67 @@ import React, { useEffect, useState } from 'react';
 import Table from '../components/Table';
 import { Hash, Clock, Shield } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { useDemoContext } from '../context/DemoContext';
 import type { Session } from '../types';
 
 const Sessions: React.FC = () => {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchSessions = async () => {
-            try {
-                const response = await apiClient.get<Session[]>('/sessions');
-                setSessions(response.data);
-            } catch (error) {
-                console.error("Failed to fetch sessions", error);
-            } finally {
-                setLoading(false);
-            }
-        };
+    const { isDemoMode } = useDemoContext();
 
-        fetchSessions();
-    }, []);
+    useEffect(() => {
+        let isMounted = true;
+
+        if (!isDemoMode) {
+            // Live Mode
+            const fetchSessions = async () => {
+                try {
+                    const response = await apiClient.get<Session[]>('/sessions');
+                    if (isMounted) {
+                        setSessions(response.data);
+                        setLoading(false);
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch sessions", error);
+                    if (isMounted) setLoading(false);
+                }
+            };
+            fetchSessions();
+            const intervalId = setInterval(fetchSessions, 2000);
+            return () => {
+                isMounted = false;
+                clearInterval(intervalId);
+            };
+        } else {
+            // Demo Mode
+            let mockData: Session[] = [];
+            let idx = 0;
+            let streamInterval: NodeJS.Timeout;
+
+            const initDemo = async () => {
+                try {
+                    const response = await apiClient.get<Session[]>('/sessions');
+                    mockData = response.data;
+                    setLoading(false);
+                    streamInterval = setInterval(() => {
+                        if (isMounted && idx < mockData.length) {
+                            setSessions(prev => [mockData[idx], ...prev]);
+                            idx++;
+                        }
+                    }, 800);
+                } catch (err) {
+                    if (isMounted) setLoading(false);
+                }
+            };
+            initDemo();
+
+            return () => {
+                isMounted = false;
+                if (streamInterval) clearInterval(streamInterval);
+            };
+        }
+    }, [isDemoMode]);
 
     const columns = [
         { 

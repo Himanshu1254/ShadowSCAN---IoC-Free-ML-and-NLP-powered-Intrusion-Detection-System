@@ -212,3 +212,6 @@ captured_logs/
 __pycache__/
 *.pyc
 venv/
+
+# Ignored large datasets to bypass GitHub 100MB limit
+Important/cicids2017_cleaned_standardized.csv

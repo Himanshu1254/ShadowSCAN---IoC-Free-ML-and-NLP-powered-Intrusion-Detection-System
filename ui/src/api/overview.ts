@@ -22,6 +22,6 @@ export const fetchOverviewStats = async (): Promise<OverviewStats> => {
 };
 
 export const fetchSystemStatus = async (): Promise<SystemStatus> => {
-  const res = await api.get("/overview/status");
+  const res = await api.get("/overview/stats");
   return res.data;
 };

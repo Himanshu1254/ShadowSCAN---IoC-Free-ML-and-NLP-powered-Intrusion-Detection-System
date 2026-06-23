@@ -316,17 +316,26 @@ def start_engines():
 # -------------------------------------------------
 @app.get("/overview/stats")
 def overview_stats():
-    return snapshot()
+    try:
+        return snapshot()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/flows")
 def get_flows():
-    return state.flows
+    try:
+        return state.flows
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/sessions")
 def get_sessions():
-    return state.sessions
+    try:
+        return state.sessions
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/test")
@@ -343,145 +352,149 @@ def test_pipeline():
 
 @app.get("/alerts")
 async def get_alerts(tier: str = "enterprise"):
-    """Returns alerts with GeoIP and Domains, but defers AI Reasoning. Injects Demo Data based on User Tier."""
-    import random
-    import datetime
+    try:
+        """Returns alerts with GeoIP and Domains, but defers AI Reasoning. Injects Demo Data based on User Tier."""
+        import random
+        import datetime
 
-    # ---------------------------------------------------------
-    # DEMO DATA GENERATORS BASED ON TIER
-    # ---------------------------------------------------------
-    if tier == "student":
-        return [
-            {
-                "id": f"EVT-EDU-{random.randint(1000, 9999)}",
-                "src_ip": "192.168.1.105",
-                "dst_ip": "8.8.8.8",
-                "protocol": "DNS",
-                "country": "Local Network",
-                "dst_country": "United States",
-                "src_domain": "student-laptop.local",
-                "dst_domain": "dns.google",
-                "severity": "LOW",
-                "confidence": "100%",
-                "attack_type": "Standard Query",
-                "detected_by": "Educational Baseline",
-                "reason": "EDUCATIONAL BREAKDOWN: This is a standard Domain Name System (DNS) query. Your computer is asking 8.8.8.8 (Google's public DNS server) to translate a human-readable website name into an IP address. This is completely safe and happens thousands of times a day.",
-                "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
-                "packet_length": random.randint(40, 120),
-                "anomaly_score": round(random.uniform(1.0, 5.0), 2)
-            },
-            {
-                "id": f"EVT-EDU-{random.randint(1000, 9999)}",
-                "src_ip": "192.168.1.105",
-                "dst_ip": "104.18.32.47",
-                "protocol": "TCP",
-                "country": "Local Network",
-                "dst_country": "United States",
-                "src_domain": "student-laptop.local",
-                "dst_domain": "cloudflare.com",
-                "severity": "LOW",
-                "confidence": "100%",
-                "attack_type": "HTTPS Handshake",
-                "detected_by": "Educational Baseline",
-                "reason": "EDUCATIONAL BREAKDOWN: This is a TCP packet initiating a secure HTTPS connection. The destination is a Cloudflare server, likely hosting a website you're trying to visit. The 'Length' indicates the size of the cryptographic handshake data.",
-                "timestamp": (datetime.datetime.now() - datetime.timedelta(seconds=2)).strftime("%H:%M:%S"),
-                "packet_length": random.randint(500, 1500),
-                "anomaly_score": round(random.uniform(1.0, 5.0), 2)
-            }
-        ]
+        # ---------------------------------------------------------
+        # DEMO DATA GENERATORS BASED ON TIER
+        # ---------------------------------------------------------
+        if tier == "student":
+            return [
+                {
+                    "id": f"EVT-EDU-{random.randint(1000, 9999)}",
+                    "src_ip": "192.168.1.105",
+                    "dst_ip": "8.8.8.8",
+                    "protocol": "DNS",
+                    "country": "Local Network",
+                    "dst_country": "United States",
+                    "src_domain": "student-laptop.local",
+                    "dst_domain": "dns.google",
+                    "severity": "LOW",
+                    "confidence": "100%",
+                    "attack_type": "Standard Query",
+                    "detected_by": "Educational Baseline",
+                    "reason": "EDUCATIONAL BREAKDOWN: This is a standard Domain Name System (DNS) query. Your computer is asking 8.8.8.8 (Google's public DNS server) to translate a human-readable website name into an IP address. This is completely safe and happens thousands of times a day.",
+                    "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+                    "packet_length": random.randint(40, 120),
+                    "anomaly_score": round(random.uniform(1.0, 5.0), 2)
+                },
+                {
+                    "id": f"EVT-EDU-{random.randint(1000, 9999)}",
+                    "src_ip": "192.168.1.105",
+                    "dst_ip": "104.18.32.47",
+                    "protocol": "TCP",
+                    "country": "Local Network",
+                    "dst_country": "United States",
+                    "src_domain": "student-laptop.local",
+                    "dst_domain": "cloudflare.com",
+                    "severity": "LOW",
+                    "confidence": "100%",
+                    "attack_type": "HTTPS Handshake",
+                    "detected_by": "Educational Baseline",
+                    "reason": "EDUCATIONAL BREAKDOWN: This is a TCP packet initiating a secure HTTPS connection. The destination is a Cloudflare server, likely hosting a website you're trying to visit. The 'Length' indicates the size of the cryptographic handshake data.",
+                    "timestamp": (datetime.datetime.now() - datetime.timedelta(seconds=2)).strftime("%H:%M:%S"),
+                    "packet_length": random.randint(500, 1500),
+                    "anomaly_score": round(random.uniform(1.0, 5.0), 2)
+                }
+            ]
 
-    elif tier == "personal":
-        # Serene environment with 0 alerts
-        return []
+        elif tier == "personal":
+            # Serene environment with 0 alerts
+            return []
 
-    # ---------------------------------------------------------
-    # LIVE / ENTERPRISE DATA GENERATOR
-    # ---------------------------------------------------------
-    raw_alerts = (
-        state.alerts.slice(-100)
-        if hasattr(state.alerts, "slice")
-        else state.alerts[-100:]
-    )
-    enriched_alerts = []
+        # ---------------------------------------------------------
+        # LIVE / ENTERPRISE DATA GENERATOR
+        # ---------------------------------------------------------
+        raw_alerts = (
+            state.alerts.slice(-100)
+            if hasattr(state.alerts, "slice")
+            else state.alerts[-100:]
+        )
+        enriched_alerts = []
 
-    for alert in raw_alerts:
-        enriched = dict(alert)
-        src_ip = enriched.get("src_ip", "")
-        dst_ip = enriched.get("dst_ip", "")
+        for alert in raw_alerts:
+            enriched = dict(alert)
+            src_ip = enriched.get("src_ip", "")
+            dst_ip = enriched.get("dst_ip", "")
 
-        # Geolocation & Mapping Enrichment
-        enriched["country"] = geo_locator.get_country(src_ip)
-        enriched["dst_country"] = geo_locator.get_country(dst_ip)
-        enriched["src_domain"] = domain_resolver.resolve(src_ip)
-        enriched["dst_domain"] = domain_resolver.resolve(dst_ip)
+            # Geolocation & Mapping Enrichment
+            enriched["country"] = geo_locator.get_country(src_ip)
+            enriched["dst_country"] = geo_locator.get_country(dst_ip)
+            enriched["src_domain"] = domain_resolver.resolve(src_ip)
+            enriched["dst_domain"] = domain_resolver.resolve(dst_ip)
 
-        # Set a placeholder for the reason. The frontend will fetch the real one.
-        if "reason" not in enriched:
-            enriched["reason"] = "AI Analysis Pending... Click to generate."
+            # Set a placeholder for the reason. The frontend will fetch the real one.
+            if "reason" not in enriched:
+                enriched["reason"] = "AI Analysis Pending... Click to generate."
 
-        enriched_alerts.append(enriched)
+            enriched_alerts.append(enriched)
 
-    if tier == "enterprise":
-        # Prepend sophisticated mock multi-vector attacks to the live stream
-        mock_enterprise_alerts = [
-            {
-                "id": f"EVT-ENT-{random.randint(1000, 9999)}",
-                "src_ip": "185.150.117.44",
-                "dst_ip": "10.0.0.5",
-                "protocol": "TCP",
-                "country": "Russia",
-                "dst_country": "Internal DMZ",
-                "src_domain": "unknown-host.ru",
-                "dst_domain": "db-server-01.local",
-                "severity": "CRITICAL",
-                "confidence": "99.8%",
-                "attack_type": "SQL Injection Fingerprint Matching",
-                "detected_by": "XGBoost Core + Signature",
-                "reason": "CRITICAL THREAT DETECTED: Payload matches known SQLi signature patterns attempting to bypass authentication via tautology injections (' OR 1=1 --). Immediate firewall block recommended.",
-                "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
-                "packet_length": random.randint(800, 2000),
-                "anomaly_score": round(random.uniform(95.0, 99.9), 2)
-            },
-            {
-                "id": f"EVT-ENT-{random.randint(1000, 9999)}",
-                "src_ip": "45.133.192.10",
-                "dst_ip": "10.0.0.12",
-                "protocol": "UDP",
-                "country": "China",
-                "dst_country": "Internal Network",
-                "src_domain": "botnet-node.cn",
-                "dst_domain": "workstation-12.local",
-                "severity": "HIGH",
-                "confidence": "94.5%",
-                "attack_type": "DDoS Threshold Breach",
-                "detected_by": "RandomForest Volume Analyzer",
-                "reason": "HIGH THREAT DETECTED: UDP flood sequence originating from a known botnet subnet. Volume exceeds baseline threshold by 4,000%. Suggesting upstream rate-limiting.",
-                "timestamp": (datetime.datetime.now() - datetime.timedelta(seconds=4)).strftime("%H:%M:%S"),
-                "packet_length": random.randint(40, 64),
-                "anomaly_score": round(random.uniform(90.0, 96.0), 2)
-            },
-            {
-                "id": f"EVT-ENT-{random.randint(1000, 9999)}",
-                "src_ip": "10.0.0.12",
-                "dst_ip": "10.0.0.250",
-                "protocol": "SMB",
-                "country": "Internal Network",
-                "dst_country": "Internal Storage",
-                "src_domain": "workstation-12.local",
-                "dst_domain": "nas-backup-01.local",
-                "severity": "CRITICAL",
-                "confidence": "98.2%",
-                "attack_type": "Ransomware Cryptographic Directory Sweep",
-                "detected_by": "Isolation Forest (Anomaly Model)",
-                "reason": "CRITICAL THREAT DETECTED: Highly anomalous lateral movement via SMB. Endpoint is rapidly scanning and modifying files on the NAS, indicating active ransomware encryption phase.",
-                "timestamp": (datetime.datetime.now() - datetime.timedelta(seconds=8)).strftime("%H:%M:%S"),
-                "packet_length": random.randint(3000, 8000),
-                "anomaly_score": round(random.uniform(97.0, 99.9), 2)
-            }
-        ]
-        return mock_enterprise_alerts + enriched_alerts
+        if tier == "enterprise":
+            # Prepend sophisticated mock multi-vector attacks to the live stream
+            mock_enterprise_alerts = [
+                {
+                    "id": f"EVT-ENT-{random.randint(1000, 9999)}",
+                    "src_ip": "185.150.117.44",
+                    "dst_ip": "10.0.0.5",
+                    "protocol": "TCP",
+                    "country": "Russia",
+                    "dst_country": "Internal DMZ",
+                    "src_domain": "unknown-host.ru",
+                    "dst_domain": "db-server-01.local",
+                    "severity": "CRITICAL",
+                    "confidence": "99.8%",
+                    "attack_type": "SQL Injection Fingerprint Matching",
+                    "detected_by": "XGBoost Core + Signature",
+                    "reason": "CRITICAL THREAT DETECTED: Payload matches known SQLi signature patterns attempting to bypass authentication via tautology injections (' OR 1=1 --). Immediate firewall block recommended.",
+                    "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
+                    "packet_length": random.randint(800, 2000),
+                    "anomaly_score": round(random.uniform(95.0, 99.9), 2)
+                },
+                {
+                    "id": f"EVT-ENT-{random.randint(1000, 9999)}",
+                    "src_ip": "45.133.192.10",
+                    "dst_ip": "10.0.0.12",
+                    "protocol": "UDP",
+                    "country": "China",
+                    "dst_country": "Internal Network",
+                    "src_domain": "botnet-node.cn",
+                    "dst_domain": "workstation-12.local",
+                    "severity": "HIGH",
+                    "confidence": "94.5%",
+                    "attack_type": "DDoS Threshold Breach",
+                    "detected_by": "RandomForest Volume Analyzer",
+                    "reason": "HIGH THREAT DETECTED: UDP flood sequence originating from a known botnet subnet. Volume exceeds baseline threshold by 4,000%. Suggesting upstream rate-limiting.",
+                    "timestamp": (datetime.datetime.now() - datetime.timedelta(seconds=4)).strftime("%H:%M:%S"),
+                    "packet_length": random.randint(40, 64),
+                    "anomaly_score": round(random.uniform(90.0, 96.0), 2)
+                },
+                {
+                    "id": f"EVT-ENT-{random.randint(1000, 9999)}",
+                    "src_ip": "10.0.0.12",
+                    "dst_ip": "10.0.0.250",
+                    "protocol": "SMB",
+                    "country": "Internal Network",
+                    "dst_country": "Internal Storage",
+                    "src_domain": "workstation-12.local",
+                    "dst_domain": "nas-backup-01.local",
+                    "severity": "CRITICAL",
+                    "confidence": "98.2%",
+                    "attack_type": "Ransomware Cryptographic Directory Sweep",
+                    "detected_by": "Isolation Forest (Anomaly Model)",
+                    "reason": "CRITICAL THREAT DETECTED: Highly anomalous lateral movement via SMB. Endpoint is rapidly scanning and modifying files on the NAS, indicating active ransomware encryption phase.",
+                    "timestamp": (datetime.datetime.now() - datetime.timedelta(seconds=8)).strftime("%H:%M:%S"),
+                    "packet_length": random.randint(3000, 8000),
+                    "anomaly_score": round(random.uniform(97.0, 99.9), 2)
+                }
+            ]
+            return mock_enterprise_alerts + enriched_alerts
 
-    return enriched_alerts
+        return enriched_alerts
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @app.get("/intelligence/unverified")
@@ -565,15 +578,18 @@ async def process_historical_log(file: UploadFile = File(...), tier: str = "ente
 
 @app.get("/health")
 def health_check():
-    model_exists = os.path.exists("models/anomaly_model.pkl")
-    logging_active = os.path.exists("Data/captured_logs")
-    return {
-        "status": "online",
-        "pipeline": "running",
-        "ml_model": "loaded" if model_exists else "not_loaded",
-        "logging": "active" if logging_active else "inactive",
-        "alerts_active": len(state.alerts) > 0,
-    }
+    try:
+        model_exists = os.path.exists("models/anomaly_model.pkl")
+        logging_active = os.path.exists("Data/captured_logs")
+        return {
+            "status": "online",
+            "pipeline": "running",
+            "ml_model": "loaded" if model_exists else "not_loaded",
+            "logging": "active" if logging_active else "inactive",
+            "alerts_active": len(state.alerts) > 0,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # -------------------------------------------------

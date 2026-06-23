@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import StatCard from "../components/StatCard";
-import { Activity, Cpu, HardDrive, ShieldAlert, Package, Zap } from "lucide-react";
+import { Activity, Cpu, ShieldAlert, Package, Zap } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { OverviewStats, BackendHealth, CpuRamTelemetry } from "../types";
 
 const Overview: React.FC = () => {
   const [stats, setStats] = useState<OverviewStats>({ packets: 0, flows: 0, sessions: 0, alerts: 0 });
   const [health, setHealth] = useState<BackendHealth | null>(null);
   const [hardware, setHardware] = useState<CpuRamTelemetry | null>(null);
+  const [hardwareHistory, setHardwareHistory] = useState<(CpuRamTelemetry & { time: string })[]>([]);
 
   const fetchAll = async () => {
     try {
@@ -19,6 +21,13 @@ const Overview: React.FC = () => {
       setStats(statsRes.data);
       setHealth(healthRes.data);
       setHardware(hwRes.data);
+      
+      setHardwareHistory(prev => {
+        const timeStr = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const newHistory = [...prev, { ...hwRes.data, time: timeStr }];
+        if (newHistory.length > 25) newHistory.shift();
+        return newHistory;
+      });
     } catch (err) {
       console.error(err);
     }
@@ -74,31 +83,35 @@ const Overview: React.FC = () => {
       </div>
 
       {/* Host Hardware Stats */}
-      {hardware && (
-        <div>
-          <div className="text-[10px] text-zinc-600 font-mono uppercase tracking-widest font-semibold mb-4">Host Resource Telemetry</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <StatCard
-              title="CPU Utilization"
-              value={`${hardware.total_cpu}%`}
-              icon={<Cpu size={14} />}
-              progress={hardware.total_cpu}
-              progressColor="bg-cyan-500"
-              subtitle="Real-time host CPU load"
-              alert={hardware.total_cpu > 85}
-            />
-            <StatCard
-              title="RAM Utilization"
-              value={`${hardware.total_ram}%`}
-              icon={<HardDrive size={14} />}
-              progress={hardware.total_ram}
-              progressColor="bg-violet-500"
-              subtitle="System memory pressure"
-              alert={hardware.total_ram > 85}
-            />
-          </div>
+      <div className="glass-panel p-6 border-white/5">
+        <div className="flex items-center gap-2 mb-6">
+          <Cpu size={18} className="text-cyan-400" />
+          <h2 className="text-sm font-bold text-zinc-100 tracking-tight">Host Resource Telemetry</h2>
+          <span className="text-[10px] text-zinc-500 font-mono ml-auto">LIVE CPU/RAM UTILIZATION</span>
         </div>
-      )}
+        <div className="h-64 w-full flex items-center justify-center">
+          {(!hardware || (hardwareHistory || []).length === 0) ? (
+            <div className="text-zinc-600 font-mono text-sm tracking-widest animate-pulse">
+              AWAITING THREAT TELEMETRY...
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={hardwareHistory || []} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="time" stroke="rgba(255,255,255,0.3)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 10, fontFamily: 'monospace' }} />
+                <YAxis stroke="rgba(255,255,255,0.3)" tick={{ fill: 'rgba(255,255,255,0.5)', fontSize: 10, fontFamily: 'monospace' }} domain={[0, 100]} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'rgba(17, 24, 39, 0.9)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px' }}
+                  itemStyle={{ fontFamily: 'monospace', fontSize: '12px' }}
+                  labelStyle={{ fontFamily: 'monospace', fontSize: '10px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}
+                />
+                <Line type="monotone" dataKey="total_cpu" name="CPU %" stroke="#06b6d4" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#06b6d4' }} isAnimationActive={false} />
+                <Line type="monotone" dataKey="total_ram" name="RAM %" stroke="#8b5cf6" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: '#8b5cf6' }} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
 
     </div>
   );

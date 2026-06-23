@@ -2,26 +2,81 @@ import React, { useEffect, useState } from 'react';
 import Table from '../components/Table';
 import { Filter, Download, Pause } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { useDemoContext } from '../context/DemoContext';
 import type { Flow } from '../types';
 
 const Flows: React.FC = () => {
     const [flows, setFlows] = useState<Flow[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchFlows = async () => {
-            try {
-                const response = await apiClient.get<Flow[]>('/flows');
-                setFlows(response.data);
-            } catch (error) {
-                console.error("Failed to fetch flows", error);
-            } finally {
-                setLoading(false);
-            }
-        };
+    const handleExport = () => {
+        const jsonString = JSON.stringify(flows, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `shadowscan-flows-${new Date().toISOString().replace(/:/g, '-')}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
 
-        fetchFlows();
-    }, []);
+    const { isDemoMode } = useDemoContext();
+
+    useEffect(() => {
+        let isMounted = true;
+
+        if (!isDemoMode) {
+            // Live Mode
+            const fetchFlows = async () => {
+                try {
+                    const response = await apiClient.get<Flow[]>('/flows');
+                    if (isMounted) {
+                        setFlows(response.data);
+                        setLoading(false);
+                    }
+                } catch (error) {
+                    console.error("Failed to fetch flows", error);
+                    if (isMounted) setLoading(false);
+                }
+            };
+            fetchFlows();
+            const intervalId = setInterval(fetchFlows, 2000);
+            return () => {
+                isMounted = false;
+                clearInterval(intervalId);
+            };
+        } else {
+            // Demo Mode
+            let mockData: Flow[] = [];
+            let idx = 0;
+            let streamInterval: NodeJS.Timeout;
+
+            const initDemo = async () => {
+                try {
+                    const response = await apiClient.get<Flow[]>('/flows');
+                    mockData = response.data;
+                    setLoading(false);
+                    streamInterval = setInterval(() => {
+                        if (isMounted && idx < mockData.length) {
+                            setFlows(prev => [mockData[idx], ...prev]);
+                            idx++;
+                        }
+                    }, 800);
+                } catch (err) {
+                    if (isMounted) setLoading(false);
+                }
+            };
+            initDemo();
+
+            return () => {
+                isMounted = false;
+                if (streamInterval) clearInterval(streamInterval);
+            };
+        }
+    }, [isDemoMode]);
 
     const columns = [
         { header: 'Time', accessor: (row: Flow) => <span className="text-zinc-500 text-xs">{row.timestamp || new Date().toLocaleTimeString()}</span> },
@@ -68,7 +123,10 @@ const Flows: React.FC = () => {
                     <button className="p-2 hover:bg-white/5 text-zinc-400 rounded-md border border-transparent transition-colors">
                         <Pause size={16} />
                     </button>
-                    <button className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 text-zinc-300 rounded-md text-xs border border-white/5 transition-colors font-medium">
+                    <button 
+                        onClick={handleExport}
+                        className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 text-zinc-300 rounded-md text-xs border border-white/5 transition-colors font-medium"
+                    >
                         <Download size={14} />
                         Export PCAP
                     </button>

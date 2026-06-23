@@ -9,7 +9,8 @@ import {
   Lock,
   Terminal,
   FolderSearch,
-  HeartPulse
+  HeartPulse,
+  Settings as SettingsIcon
 } from 'lucide-react';
 
 import { apiClient } from '../api/client';
@@ -43,6 +44,7 @@ const Sidebar: React.FC = () => {
     const hidsItems = [
         { path: '/hids', label: 'Host Monitor', icon: <FolderSearch size={15} /> },
         { path: '/health', label: 'Sys Health', icon: <HeartPulse size={15} /> },
+        { path: '/settings', label: 'Settings', icon: <SettingsIcon size={15} /> },
     ];
 
     const isOnline = health?.status === 'online';
