@@ -1,32 +1,27 @@
-@import url('https://fonts.googleapis.com/css2?family=Iceland&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-
-  /* Forces the font and adds a slight letter spacing for that terminal HUD look */
-  * {
-    font-family: 'Iceland', sans-serif !important;
-    letter-spacing: 0.05em;
-  }
-
   body {
-    /* Merged the Deep Terminal Black and Hacker Green into Tailwind logic */
-    @apply bg-[#050505] text-[#00ff00] antialiased selection:bg-orange-500/20 selection:text-orange-500;
+    @apply bg-[#09090b] text-zinc-300 antialiased selection:bg-zinc-800 selection:text-white;
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
     
-    /* Subtle Cyberpunk Grid Background */
-    background-image: linear-gradient(rgba(0, 255, 0, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 0, 0.03) 1px, transparent 1px);
-    background-size: 30px 30px;
+    /* Clean Minimal Grid Background */
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 40px 40px;
     background-position: center center;
+    background-attachment: fixed;
   }
 
-  /* CRT Scanline Overlay */
+  /* Soft Vignette Overlay */
   body::after {
     content: " ";
     display: block;
@@ -35,48 +30,66 @@
     left: 0;
     bottom: 0;
     right: 0;
-    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    background: radial-gradient(circle at center, transparent 40%, rgba(0, 0, 0, 0.4) 100%);
     z-index: 999;
-    background-size: 100% 2px, 3px 100%;
     pointer-events: none;
-    opacity: 0.6;
+  }
+  
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace !important;
   }
 }
 
 @layer utilities {
-  .glow-border {
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.2), inset 0 0 10px rgba(0, 255, 0, 0.1);
+  /* Minimal Glass Panels */
+  .glass-panel {
+    @apply bg-zinc-950/80 backdrop-blur-md border border-white/[0.05] shadow-lg rounded-md;
   }
-  .glow-border-alert {
-    box-shadow: 0 0 15px rgba(255, 68, 68, 0.3), inset 0 0 10px rgba(255, 68, 68, 0.1);
+  
+  /* Tier UI Colors */
+  .tier-critical {
+    @apply text-rose-500 bg-rose-500/10 border-rose-500/20;
   }
-  .text-glow {
-    text-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
+  .tier-critical-glow {
+    box-shadow: 0 0 20px rgba(225, 29, 72, 0.15), inset 0 0 10px rgba(225, 29, 72, 0.05);
   }
-  .text-glow-alert {
-    text-shadow: 0 0 8px rgba(255, 68, 68, 0.8);
+
+  .tier-high {
+    @apply text-orange-500 bg-orange-500/10 border-orange-500/20;
+  }
+  .tier-high-glow {
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.15), inset 0 0 10px rgba(249, 115, 22, 0.05);
+  }
+
+  .tier-medium {
+    @apply text-amber-500 bg-amber-500/10 border-amber-500/20;
+  }
+  
+  .tier-low {
+    @apply text-emerald-500 bg-emerald-500/10 border-emerald-500/20;
+  }
+
+  .tier-info {
+    @apply text-cyan-500 bg-cyan-500/10 border-cyan-500/20;
   }
 }
 
 /* ----------------------------------------- */
-/* CUSTOM SCROLLBAR FOR DARK THEME           */
+/* MINIMAL SCROLLBAR                         */
 /* ----------------------------------------- */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #0a0a0a;
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #262626;
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #404040;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* ----------------------------------------- */
@@ -84,22 +97,27 @@
 /* ----------------------------------------- */
 .recharts-cartesian-grid-horizontal line,
 .recharts-cartesian-grid-vertical line {
-  stroke: #262626;
+  stroke: rgba(255, 255, 255, 0.05);
+}
+.recharts-tooltip-wrapper {
+  outline: none !important;
 }
 
-/* Add to your existing layout file */
+/* ----------------------------------------- */
+/* ANIMATIONS                                */
+/* ----------------------------------------- */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.animate-fade-in {
-  animation: fadeIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

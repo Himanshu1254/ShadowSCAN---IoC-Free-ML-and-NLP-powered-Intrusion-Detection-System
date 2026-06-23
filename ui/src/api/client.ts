@@ -6,3 +6,10 @@ export const apiClient = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+export const apiGet = async (url: string) => {
+  const res = await apiClient.get(url);
+  return res.data;
+};
+
+export default apiClient;

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Table from '../components/Table';
 import { Filter, Download, Pause } from 'lucide-react';
 import { apiClient } from '../api/client';
-import { Flow } from '../types';
+import type { Flow } from '../types';
 
 const Flows: React.FC = () => {
     const [flows, setFlows] = useState<Flow[]>([]);
@@ -24,47 +24,51 @@ const Flows: React.FC = () => {
     }, []);
 
     const columns = [
-        { header: 'Time', accessor: (row: Flow) => <span className="text-neutral-500 text-xs">{row.timestamp || new Date().toLocaleTimeString()}</span> },
-        { header: 'Source', accessor: (row: Flow) => <span className="text-neutral-300">{row.src_ip}</span> },
-        { header: 'Port', accessor: (row: Flow) => <span className="text-neutral-500">{row.src_port}</span> },
-        { header: 'Destination', accessor: (row: Flow) => <span className="text-neutral-300">{row.dst_ip}</span> },
-        { header: 'Port', accessor: (row: Flow) => <span className="text-neutral-500">{row.dst_port}</span> },
+        { header: 'Time', accessor: (row: Flow) => <span className="text-zinc-500 text-xs">{row.timestamp || new Date().toLocaleTimeString()}</span> },
+        { header: 'Source', accessor: (row: Flow) => <span className="text-zinc-300">{row.src_ip}</span> },
+        { header: 'Port', accessor: (row: Flow) => <span className="text-zinc-500">{row.src_port}</span> },
+        { header: 'Destination', accessor: (row: Flow) => <span className="text-zinc-300">{row.dst_ip}</span> },
+        { header: 'Port', accessor: (row: Flow) => <span className="text-zinc-500">{row.dst_port}</span> },
         { 
             header: 'Proto', 
             accessor: (row: Flow) => (
-                <span className={`text-xs px-1.5 py-0.5 rounded border ${
-                    row.protocol === 'SSH' ? 'border-orange-500/30 text-orange-500' : 'border-neutral-700 text-neutral-400'
+                <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                    row.protocol === 'SSH' ? 'border-orange-500/30 text-orange-500 bg-orange-500/10' : 'border-white/10 text-zinc-400'
                 }`}>
                     {row.protocol}
                 </span>
             ) 
         },
-        { header: 'Size', accessor: (row: Flow) => <span className="text-neutral-400">{row.packet_count} p</span> },
+        { header: 'Size', accessor: (row: Flow) => <span className="text-zinc-400">{row.packet_count} p</span> },
     ];
 
     return (
-        <div className="space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#0a0a0a] p-4 rounded-sm border border-neutral-800">
+        <div className="animate-fade-in space-y-6">
+            <div className="flex flex-col gap-1 mb-8">
+                <h1 className="text-3xl font-bold tracking-tight text-zinc-100">Packet Flows</h1>
+                <p className="text-zinc-500 font-mono text-sm">Raw network connection telemetry.</p>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 glass-panel p-4">
                 <div className="flex items-center gap-4">
-                    <h2 className="text-neutral-200 font-bold tracking-tight">Packet Flows</h2>
-                    <div className="flex items-center gap-1 px-2 py-1 bg-neutral-900 border border-neutral-800 rounded">
-                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                        <span className="text-xs text-neutral-500 font-mono uppercase">Live Stream</span>
+                    <div className="flex items-center gap-2 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md">
+                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse-slow shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                        <span className="text-[10px] text-emerald-500 font-mono uppercase tracking-widest font-semibold">Live Stream</span>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
                     <div className="relative group">
-                        <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 group-focus-within:text-neutral-300" />
+                        <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-zinc-300 transition-colors" />
                         <input 
                             type="text" 
                             placeholder="Filter IP / Port" 
-                            className="bg-neutral-950 border border-neutral-800 text-neutral-300 text-xs rounded-sm pl-9 pr-4 py-2 w-64 focus:outline-none focus:border-neutral-600 transition-colors placeholder:text-neutral-700 font-mono"
+                            className="bg-black/20 border border-white/10 text-zinc-300 text-xs rounded-md pl-9 pr-4 py-2 w-64 focus:outline-none focus:border-zinc-600 transition-colors placeholder:text-zinc-600 font-mono"
                         />
                     </div>
-                    <button className="p-2 hover:bg-neutral-900 text-neutral-400 rounded-sm border border-transparent hover:border-neutral-800 transition-colors">
+                    <button className="p-2 hover:bg-white/5 text-zinc-400 rounded-md border border-transparent transition-colors">
                         <Pause size={16} />
                     </button>
-                    <button className="flex items-center gap-2 px-3 py-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 rounded-sm text-xs border border-neutral-800 transition-colors font-medium">
+                    <button className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 text-zinc-300 rounded-md text-xs border border-white/5 transition-colors font-medium">
                         <Download size={14} />
                         Export PCAP
                     </button>
@@ -72,7 +76,7 @@ const Flows: React.FC = () => {
             </div>
 
             {loading ? (
-                <div className="text-neutral-500 font-mono text-sm p-4">Loading flows...</div>
+                <div className="text-zinc-500 font-mono text-sm p-4 animate-pulse">Loading flows...</div>
             ) : (
                 <Table data={flows} columns={columns} emptyMessage="No flows detected." />
             )}

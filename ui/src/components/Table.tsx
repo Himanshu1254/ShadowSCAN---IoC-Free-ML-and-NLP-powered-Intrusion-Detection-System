@@ -15,31 +15,31 @@ interface TableProps<T> {
 
 function Table<T>({ data, columns, onRowClick, emptyMessage = "No data available" }: TableProps<T>) {
     return (
-        <div className="w-full overflow-hidden border border-neutral-800 rounded-sm bg-[#0a0a0a]">
+        <div className="w-full overflow-hidden border border-white/5 rounded-md glass-panel">
             <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                     <thead>
-                        <tr className="border-b border-neutral-800 bg-[#111111]">
+                        <tr className="border-b border-white/5 bg-white/[0.02]">
                             {columns.map((col, index) => (
                                 <th 
                                     key={index} 
-                                    className={`py-3 px-4 text-[11px] font-mono uppercase tracking-wider text-neutral-500 font-medium ${col.className || ''}`}
+                                    className={`py-3 px-4 text-[10px] font-mono uppercase tracking-widest text-zinc-500 font-semibold ${col.className || ''}`}
                                 >
                                     {col.header}
                                 </th>
                             ))}
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-900">
+                    <tbody className="divide-y divide-white/5">
                         {data.length > 0 ? (
                             data.map((row, rowIndex) => (
                                 <tr 
                                     key={(row as any).id || rowIndex} 
                                     onClick={() => onRowClick && onRowClick(row)}
-                                    className={`group transition-colors ${onRowClick ? 'cursor-pointer hover:bg-neutral-900' : 'hover:bg-neutral-900/30'}`}
+                                    className={`group transition-colors ${onRowClick ? 'cursor-pointer hover:bg-white/[0.02]' : 'hover:bg-white/[0.01]'}`}
                                 >
                                     {columns.map((col, colIndex) => (
-                                        <td key={colIndex} className="py-3 px-4 text-sm text-neutral-300 font-mono">
+                                        <td key={colIndex} className="py-3 px-4 text-sm text-zinc-300 font-mono">
                                             {typeof col.accessor === 'function' 
                                                 ? col.accessor(row) 
                                                 : (row[col.accessor] as React.ReactNode)}
@@ -49,7 +49,7 @@ function Table<T>({ data, columns, onRowClick, emptyMessage = "No data available
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={columns.length} className="py-12 text-center text-neutral-600 font-mono text-sm">
+                                <td colSpan={columns.length} className="py-12 text-center text-zinc-600 font-mono text-sm">
                                     {emptyMessage}
                                 </td>
                             </tr>

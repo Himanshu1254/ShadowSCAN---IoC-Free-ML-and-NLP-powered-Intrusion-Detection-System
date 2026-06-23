@@ -1,143 +1,327 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Table from '../components/Table';
-import { AlertTriangle, ChevronRight, Filter } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Bot, X, Globe } from 'lucide-react';
 import { apiClient } from '../api/client';
+import type { Alert, AlertTier } from '../types';
 
-const Intelligence: React.FC = () => {
-    const navigate = useNavigate();
-    const [alerts, setAlerts] = useState<any[]>([]);
+// ----------------------------------------
+// AI Analysis Modal
+// ----------------------------------------
+interface AiModalProps {
+    alert: Alert;
+    onClose: () => void;
+}
+
+const AiModal: React.FC<AiModalProps> = ({ alert, onClose }) => {
+    const [reasoning, setReasoning] = useState<string>('');
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        const fetchAlerts = async () => {
+        const analyze = async () => {
             try {
-                const response = await apiClient.get('/alerts');
-                setAlerts(response.data);
-            } catch (error) {
-                console.error("Failed to fetch alerts", error);
+                const res = await apiClient.post('/api/intelligence/analyze', {
+                    src_ip: alert.src_ip,
+                    dst_ip: alert.dst_ip,
+                    attack_type: alert.attack_type || 'Unknown',
+                    severity: alert.severity,
+                    raw_payload: alert.reason || 'N/A',
+                });
+                setReasoning(res.data.reasoning);
+            } catch (e: any) {
+                const detail = e?.response?.data?.detail || 'Ollama engine offline. Ensure localhost:11434 is running.';
+                setError(detail);
             } finally {
                 setLoading(false);
             }
         };
+        analyze();
+    }, [alert]);
 
-        fetchAlerts();
-        const interval = setInterval(fetchAlerts, 3000); // live refresh
-        return () => clearInterval(interval);
-    }, []);
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div
+                className="relative z-10 w-full max-w-2xl glass-panel border-cyan-500/20 shadow-[0_0_40px_rgba(6,182,212,0.1)] animate-fade-in"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Modal Header */}
+                <div className="flex items-center justify-between p-5 border-b border-white/5">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-cyan-500/10 border border-cyan-500/20 rounded-md text-cyan-400">
+                            <Bot size={16} />
+                        </div>
+                        <div>
+                            <h2 className="text-sm font-bold text-zinc-100 tracking-tight">AI Cognitive Analysis</h2>
+                            <p className="text-[10px] text-zinc-500 font-mono">Powered by local Ollama LLM</p>
+                        </div>
+                    </div>
+                    <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors p-1">
+                        <X size={16} />
+                    </button>
+                </div>
 
-    const getSeverityStyle = (severity: string) => {
-        if (severity === "HIGH") return 'text-red-500 bg-red-500/10 border-red-500/20';
-        if (severity === "MEDIUM") return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20';
-        return 'text-green-500 bg-green-500/10 border-green-500/20';
+                {/* Alert Context */}
+                <div className="p-5 border-b border-white/5 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                        {[
+                            { label: 'Attack Type', value: alert.attack_type || 'Unknown' },
+                            { label: 'Severity', value: alert.severity },
+                            { label: 'Source', value: `${alert.src_ip} (${alert.country || '?'})` },
+                            { label: 'Destination', value: `${alert.dst_ip} (${alert.dst_country || '?'})` },
+                            { label: 'Detected By', value: alert.detected_by || 'N/A' },
+                            { label: 'Confidence', value: alert.confidence || 'N/A' },
+                        ].map(({ label, value }) => (
+                            <div key={label} className="bg-black/30 rounded-md p-2.5 border border-white/5">
+                                <div className="text-[9px] text-zinc-600 font-mono uppercase tracking-widest mb-1">{label}</div>
+                                <div className="text-xs text-zinc-300 font-mono truncate">{value}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* AI Reasoning */}
+                <div className="p-5">
+                    <div className="text-[10px] text-cyan-500 font-mono uppercase tracking-widest mb-3">Cognitive Reasoning</div>
+                    {loading && (
+                        <div className="flex items-center gap-3 text-zinc-500 font-mono text-sm">
+                            <div className="w-4 h-4 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+                            Querying Ollama LLM engine...
+                        </div>
+                    )}
+                    {error && (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-md p-3 text-red-400 text-xs font-mono">
+                            ⚠ {error}
+                        </div>
+                    )}
+                    {reasoning && (
+                        <p className="text-zinc-300 text-sm font-mono leading-relaxed border-l-2 border-cyan-500/40 pl-4 py-1 bg-gradient-to-r from-cyan-500/5 to-transparent">
+                            {reasoning}
+                        </p>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ----------------------------------------
+// Intelligence Page
+// ----------------------------------------
+const Intelligence: React.FC = () => {
+    const navigate = useNavigate();
+    const [alerts, setAlerts] = useState<Alert[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [tier, setTier] = useState<AlertTier>('enterprise');
+    const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
+    const [unverified, setUnverified] = useState<Record<string, string>>({});
+
+    const fetchAlerts = useCallback(async () => {
+        try {
+            const response = await apiClient.get(`/alerts?tier=${tier}`);
+            setAlerts(response.data);
+        } catch (error) {
+            console.error('Failed to fetch alerts', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [tier]);
+
+    const fetchUnverified = async () => {
+        try {
+            const res = await apiClient.get('/intelligence/unverified');
+            setUnverified(res.data);
+        } catch {}
     };
 
+    useEffect(() => {
+        setLoading(true);
+        fetchAlerts();
+        fetchUnverified();
+        const interval = setInterval(fetchAlerts, 4000);
+        return () => clearInterval(interval);
+    }, [fetchAlerts]);
+
+    const getSeverityStyle = (severity: string) => {
+        switch (severity?.toUpperCase()) {
+            case 'CRITICAL': return 'tier-critical';
+            case 'HIGH': return 'tier-high';
+            case 'MEDIUM': return 'tier-medium';
+            default: return 'tier-low';
+        }
+    };
+
+    const tiers: { key: AlertTier; label: string; color: string }[] = [
+        { key: 'enterprise', label: 'Enterprise', color: 'text-rose-400 border-rose-500/30 bg-rose-500/10' },
+        { key: 'personal', label: 'Personal', color: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10' },
+        { key: 'student', label: 'Student', color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' },
+    ];
+
     const columns = [
-        { 
-            header: 'Severity', 
-            accessor: (row: any) => (
-                <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border rounded-sm ${getSeverityStyle(row.severity)}`}>
+        {
+            header: 'Severity',
+            accessor: (row: Alert) => (
+                <span className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border rounded-sm ${getSeverityStyle(row.severity)}`}>
                     {row.severity}
                 </span>
             )
         },
-
         {
-            header: 'Confidence',
-            accessor: (row: any) => (
-                <span className="text-cyan-400 font-mono text-xs">
-                    {row.confidence || "N/A"}
-                </span>
+            header: 'Attack Type',
+            accessor: (row: Alert) => (
+                <span className="text-zinc-300 text-xs font-mono">{row.attack_type || 'N/A'}</span>
             )
         },
-
         {
             header: 'Source',
-            accessor: (row: any) => (
-                <span className="font-mono text-orange-500/80 text-xs">
-                    {row.src_ip}
-                </span>
+            accessor: (row: Alert) => (
+                <div>
+                    <div className="font-mono text-orange-400 text-xs">{row.src_ip}</div>
+                    {row.country && <div className="text-[10px] text-zinc-600 font-mono">{row.country}</div>}
+                </div>
             )
         },
-
         {
             header: 'Destination',
-            accessor: (row: any) => (
-                <span className="font-mono text-neutral-400 text-xs">
-                    {row.dst_ip}
-                </span>
+            accessor: (row: Alert) => (
+                <div>
+                    <div className="font-mono text-zinc-400 text-xs">{row.dst_ip}</div>
+                    {row.dst_country && <div className="text-[10px] text-zinc-600 font-mono">{row.dst_country}</div>}
+                </div>
             )
         },
-
         {
-            header: 'Protocol',
-            accessor: (row: any) => (
-                <span className="font-mono text-neutral-500 text-xs">
-                    {row.protocol}
-                </span>
+            header: 'Detected By',
+            accessor: (row: Alert) => (
+                <span className="text-cyan-500/80 text-[10px] font-mono">{row.detected_by || '—'}</span>
             )
         },
-
         {
-            header: 'Reason',
-            accessor: (row: any) => (
-                <span className="text-neutral-400 text-xs max-w-xs truncate">
-                    {row.reason || "Anomalous activity"}
-                </span>
-            )
+            header: 'Score',
+            accessor: (row: Alert) => row.anomaly_score != null ? (
+                <div className="flex items-center gap-2">
+                    <div className="w-14 h-1 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                        <div
+                            className={`h-full rounded-full ${row.anomaly_score > 90 ? 'bg-rose-500' : row.anomaly_score > 70 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                            style={{ width: `${Math.min(row.anomaly_score, 100)}%` }}
+                        />
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-500">{row.anomaly_score}%</span>
+                </div>
+            ) : <span className="text-zinc-600 text-xs">—</span>
         },
-
-        { 
-            header: '', 
-            accessor: () => <ChevronRight size={14} className="text-neutral-700" />,
-            className: "w-8"
+        {
+            header: 'Conf',
+            accessor: (row: Alert) => <span className="text-zinc-400 font-mono text-xs">{row.confidence || '—'}</span>
+        },
+        {
+            header: 'AI',
+            accessor: (row: Alert) => (
+                <button
+                    onClick={(e) => { e.stopPropagation(); setSelectedAlert(row); }}
+                    className="p-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded text-cyan-400 hover:bg-cyan-500/20 transition-colors"
+                    title="AI Analysis"
+                >
+                    <Bot size={12} />
+                </button>
+            ),
+            className: 'w-10'
+        },
+        {
+            header: '',
+            accessor: () => <ChevronRight size={14} className="text-zinc-600" />,
+            className: 'w-8'
         },
     ];
 
+    const unverifiedEntries = Object.entries(unverified);
+
     return (
-        <div className="space-y-6">
+        <>
+            {selectedAlert && <AiModal alert={selectedAlert} onClose={() => setSelectedAlert(null)} />}
 
-            <div className="bg-[#0a0a0a] border border-red-900/30 rounded-sm p-4 flex items-center justify-between shadow-[0_0_20px_rgba(239,68,68,0.05)]">
-                <div className="flex items-center gap-4">
-                    <div className="p-2 bg-red-900/20 rounded-sm text-red-500 border border-red-900/30">
-                        <AlertTriangle size={20} />
-                    </div>
+            <div className="animate-fade-in space-y-6">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h3 className="text-neutral-200 font-bold tracking-tight">Active Threats Detected</h3>
-                        <p className="text-neutral-500 text-xs mt-1">
-                            {alerts.length} anomalies detected requiring attention.
-                        </p>
+                        <h1 className="text-3xl font-bold tracking-tight text-zinc-100">Threat Intelligence</h1>
+                        <p className="text-zinc-500 font-mono text-sm mt-1">NIDS anomaly stream with AI cognitive analysis.</p>
+                    </div>
+
+                    {/* Tier Selector */}
+                    <div className="flex items-center gap-1 glass-panel p-1 rounded-lg self-start sm:self-auto">
+                        {tiers.map(t => (
+                            <button
+                                key={t.key}
+                                onClick={() => setTier(t.key)}
+                                className={`px-3 py-1.5 text-[10px] font-mono font-bold uppercase tracking-widest rounded-md border transition-all ${
+                                    tier === t.key ? t.color : 'text-zinc-600 border-transparent hover:text-zinc-400'
+                                }`}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
                     </div>
                 </div>
-                <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wider rounded-sm transition-colors">
-                    Review All
-                </button>
-            </div>
 
-            <div className="space-y-2">
-                <div className="flex justify-between items-center px-1">
-                    <h2 className="text-sm font-bold text-neutral-400 uppercase tracking-wider">
-                        Alert Feed
-                    </h2>
-                    <button className="flex items-center gap-2 text-xs text-neutral-500 hover:text-neutral-300">
-                        <Filter size={12} />
-                        Filter
-                    </button>
+                {/* Alert Stats Banner */}
+                <div className={`glass-panel p-4 flex items-center justify-between ${alerts.length > 0 ? 'border-rose-500/20' : 'border-emerald-500/10'}`}>
+                    <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-md border ${alerts.length > 0 ? 'bg-rose-500/10 border-rose-500/30 text-rose-400' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'}`}>
+                            <AlertTriangle size={18} />
+                        </div>
+                        <div>
+                            <h3 className="text-zinc-200 font-bold text-sm">
+                                {alerts.length > 0 ? `${alerts.length} Active Threats` : 'Network Clear'}
+                            </h3>
+                            <p className="text-zinc-500 text-xs mt-0.5 font-mono">
+                                Mode: <span className="text-zinc-300 font-semibold uppercase">{tier}</span> — Click any row for details · Click <Bot size={10} className="inline" /> for AI analysis
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
-                {loading ? (
-                    <div className="p-4 text-neutral-500">Loading intelligence...</div>
-                ) : (
-                    <Table 
-                        data={alerts} 
-                        columns={columns} 
-                        onRowClick={(row) =>
-                            navigate(`/alert/${encodeURIComponent(row.src_ip + '-' + row.protocol)}`, { state: { alert: row } })
-                        }
-                    />
+                {/* Alert Table */}
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between px-1">
+                        <h2 className="text-[10px] font-mono font-semibold text-zinc-500 uppercase tracking-widest">Live Alert Feed</h2>
+                    </div>
+                    {loading ? (
+                        <div className="p-6 text-zinc-500 font-mono text-sm animate-pulse glass-panel">Loading intelligence feed...</div>
+                    ) : (
+                        <Table
+                            data={alerts}
+                            columns={columns}
+                            onRowClick={(row) => navigate(`/alert/${encodeURIComponent((row.id || row.src_ip) + '-' + row.protocol)}`, { state: { alert: row } })}
+                        />
+                    )}
+                </div>
+
+                {/* Unverified Entities Panel */}
+                {unverifiedEntries.length > 0 && (
+                    <div className="glass-panel p-5 space-y-4 border-amber-500/10">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-400">
+                                <Globe size={14} />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-bold text-zinc-200">Unverified Entities</h3>
+                                <p className="text-[10px] text-zinc-500 font-mono">{unverifiedEntries.length} IPs with no reverse DNS — flagged for triage</p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {unverifiedEntries.slice(0, 12).map(([ip, label]) => (
+                                <div key={ip} className="flex items-center justify-between bg-black/30 rounded-md px-3 py-2 border border-white/5">
+                                    <span className="font-mono text-xs text-orange-400">{ip}</span>
+                                    <span className="text-[10px] text-zinc-600 font-mono truncate ml-2">{label}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 )}
             </div>
-        </div>
+        </>
     );
 };
 

@@ -7,6 +7,7 @@ def get_suspicious_processes():
     and formats them for the ShadowSCAN dashboard.
     """
     process_list = []
+    core_count = psutil.cpu_count() or 1
 
     try:
         # Iterate over all active PIDs. We use dict() for faster attribute access.
@@ -16,9 +17,13 @@ def get_suspicious_processes():
             try:
                 pinfo = proc.info
 
+                # Skip System Idle Process (PID 0) which throws off metrics
+                if pinfo["pid"] == 0:
+                    continue
+
                 # Skip idle/system hidden processes that don't use measurable resources
-                # psutil sometimes returns None for cpu/memory if it can't read it
-                cpu_usage = pinfo.get("cpu_percent") or 0.0
+                # Normalize CPU usage across cores so max is 100% instead of (cores * 100)%
+                cpu_usage = (pinfo.get("cpu_percent") or 0.0) / core_count
                 mem_usage = pinfo.get("memory_percent") or 0.0
 
                 if cpu_usage == 0.0 and mem_usage < 0.1:
@@ -32,8 +37,8 @@ def get_suspicious_processes():
                     else False
                 )
 
-                # Determine a basic status flag based on CPU usage
-                status = "HIGH CPU" if cpu_usage > 30.0 else "NORMAL"
+                # Determine a basic status flag based on normalized CPU usage (>15.0%)
+                status = "HIGH CPU" if cpu_usage > 15.0 else "NORMAL"
 
                 process_list.append(
                     {
