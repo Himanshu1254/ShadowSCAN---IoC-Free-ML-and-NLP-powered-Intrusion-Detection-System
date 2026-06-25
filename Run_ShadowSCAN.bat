@@ -8,7 +8,7 @@ REM Activate virtual environment
 call venv\Scripts\activate
 
 REM Start backend
-start cmd /k "uvicorn Core.api.main:app --reload"
+start cmd /k "uvicorn Core.api.main:app --reload --port 8001"
 
 REM Small delay
 timeout /t 2 >nul

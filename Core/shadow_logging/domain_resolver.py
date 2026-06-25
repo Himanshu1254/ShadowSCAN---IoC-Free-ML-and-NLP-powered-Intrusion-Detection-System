@@ -17,7 +17,7 @@ class DomainResolver:
             try:
                 with open(CACHE_FILE, "r") as f:
                     self.cache = json.load(f)
-                logger.info(f"💾 Loaded {len(self.cache)} mapped entities into memory.")
+                logger.info(f"[*] Loaded {len(self.cache)} mapped entities into memory.")
             except Exception as e:
                 logger.error(f"Failed to load Intel Cache database: {e}")
                 self.cache = {}

@@ -1,64 +1,56 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, ChevronRight, Terminal, UserCheck } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Shield, ChevronRight, Terminal, UserCheck, Activity, Zap } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useDemoContext } from './context/DemoContext';
 
-export default function Login({ onLogin }: { onLogin: (user: string, mode: string) => void }) {
-  const [view, setView] = useState<'LANDING' | 'AUTH' | 'LOGS'>('LANDING');
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+export default function Login() {
+  const navigate = useNavigate();
+  const { setIsDemoMode } = useDemoContext();
+  const [view, setView] = useState<'LANDING' | 'LOGS'>('LANDING');
   const [logs, setLogs] = useState<{user: string, time: string, mode: string}[]>([]);
+  const [isBooting, setIsBooting] = useState(false);
+  const [bootLog, setBootLog] = useState<string[]>([]);
 
-  // Load Auth Logs from Local Storage
   useEffect(() => {
     const saved = localStorage.getItem('shadowScanAuthLogs');
     if (saved) setLogs(JSON.parse(saved));
   }, []);
 
-  const validate = () => {
-    const userRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/;
-    const passRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
-    
-    if (!userRegex.test(username)) return "Username requires 1 Upper, 1 Lower, and 1 Number.";
-    if (!passRegex.test(password)) return "Password requires 8+ chars, 1 Upper, 1 Lower, 1 Number, 1 Special Char.";
-    return "";
-  };
-
-  const handleAuth = (e: React.FormEvent, mode: string) => {
-    e.preventDefault();
-    if (mode !== 'Demo') {
-      const valError = validate();
-      if (valError) {
-        setError(valError);
-        return;
-      }
-    }
-    
-    const userString = mode === 'Demo' ? 'Guest_Demo' : username;
-    const newLog = { user: userString, time: new Date().toLocaleString(), mode };
-    const updatedLogs = [newLog, ...logs].slice(0, 10); // Keep last 10
-    
+  const handleModeSelection = (mode: 'Demo' | 'Live') => {
+    setIsBooting(true);
+    const newLog = { user: `Operator_${mode}`, time: new Date().toLocaleString(), mode };
+    const updatedLogs = [newLog, ...logs].slice(0, 10);
     localStorage.setItem('shadowScanAuthLogs', JSON.stringify(updatedLogs));
-    onLogin(userString, mode);
+
+    setIsDemoMode(mode === 'Demo');
+
+    // Boot sequence animation
+    const bootMessages = [
+      "INITIALIZING SHADOWSCAN KERNEL...",
+      `LOADING ${mode.toUpperCase()} PROFILE...`,
+      "BINDING TO NETWORK INTERFACES...",
+      "SYSTEM ONLINE."
+    ];
+    let i = 0;
+    const interval = setInterval(() => {
+      setBootLog(prev => [...prev, bootMessages[i]]);
+      i++;
+      if (i === bootMessages.length) clearInterval(interval);
+    }, 400);
+
+    setTimeout(() => {
+      navigate('/app');
+    }, 2000);
   };
 
-  if (view === 'LANDING') {
+  if (isBooting) {
     return (
-      <div 
-        className="min-h-screen bg-black flex flex-col items-center justify-center text-zinc-300 selection:bg-orange-500/30"
-        style={{ fontFamily: "'Orbitron', sans-serif" }}
-      >
-        <Shield className="w-16 h-16 text-orange-500 mb-6 animate-pulse" />
-        <h1 className="text-5xl font-bold text-white tracking-widest uppercase mb-2">Shadow<span className="text-orange-500">SCAN</span></h1>
-        <p className="text-zinc-500 tracking-[0.3em] text-sm mb-12">AUTONOMOUS THREAT INTELLIGENCE ENGINE</p>
-        
-        <div className="flex space-x-6">
-          <button onClick={() => setView('AUTH')} className="px-8 py-3 bg-orange-500/10 text-orange-500 border border-orange-500/30 hover:bg-orange-500/20 transition-all uppercase tracking-widest text-xs font-bold flex items-center">
-            Initialize Console <ChevronRight className="w-4 h-4 ml-2" />
-          </button>
-          <button onClick={() => setView('LOGS')} className="px-8 py-3 bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-600 transition-all uppercase tracking-widest text-xs flex items-center">
-            <Terminal className="w-4 h-4 mr-2" /> View Auth Logs
-          </button>
+      <div className="flex h-screen bg-zinc-950 items-center justify-center font-mono">
+        <div className="w-full max-w-2xl p-8 space-y-4 text-emerald-500">
+          {bootLog.map((log, i) => (
+            <div key={i} className="animate-fade-in">&gt; {log}</div>
+          ))}
+          <div className="animate-pulse">&gt; <span className="w-2 h-4 bg-emerald-500 inline-block align-middle" /></div>
         </div>
       </div>
     );
@@ -70,17 +62,17 @@ export default function Login({ onLogin }: { onLogin: (user: string, mode: strin
         className="min-h-screen bg-black flex flex-col items-center justify-center text-zinc-300 p-6"
         style={{ fontFamily: "'Orbitron', sans-serif" }}
       >
-        <div className="w-full max-w-md border border-zinc-800 bg-[#050505] p-6 rounded">
+        <div className="w-full max-w-md border border-zinc-800 bg-[#050505] p-6 rounded shadow-[0_0_30px_rgba(249,115,22,0.05)]">
           <h2 className="text-orange-500 text-sm tracking-widest uppercase mb-4 border-b border-zinc-800 pb-2">Local Authentication Registry</h2>
           <div className="space-y-3 mb-6 max-h-64 overflow-y-auto">
             {logs.length === 0 ? <p className="text-xs text-zinc-600 text-center">No login history found on this device.</p> : logs.map((log, i) => (
-              <div key={i} className="flex justify-between text-[10px] bg-zinc-900 p-2 rounded">
+              <div key={i} className="flex justify-between text-[10px] bg-zinc-900 p-2 rounded border border-zinc-800/50">
                 <span className="text-white"><UserCheck className="w-3 h-3 inline mr-1 text-cyan-500"/> {log.user}</span>
                 <span className="text-zinc-500">{log.time} [{log.mode}]</span>
               </div>
             ))}
           </div>
-          <button onClick={() => setView('LANDING')} className="w-full py-2 text-xs text-zinc-500 border border-zinc-800 hover:text-white uppercase tracking-widest">Return</button>
+          <button onClick={() => setView('LANDING')} className="w-full py-2 text-xs text-zinc-500 border border-zinc-800 hover:text-white uppercase tracking-widest transition-colors">Return</button>
         </div>
       </div>
     );
@@ -88,38 +80,58 @@ export default function Login({ onLogin }: { onLogin: (user: string, mode: strin
 
   return (
     <div 
-      className="min-h-screen bg-black flex flex-col items-center justify-center text-zinc-300"
+      className="min-h-screen bg-[#030712] flex flex-col items-center justify-center text-zinc-300 p-6 relative overflow-hidden"
       style={{ fontFamily: "'Orbitron', sans-serif" }}
     >
-      <div className="w-full max-w-sm border border-zinc-800 bg-[#050505] p-8 rounded shadow-[0_0_30px_rgba(249,115,22,0.05)]">
-        <h2 className="text-white tracking-widest uppercase text-xl mb-6 text-center">
-          {isSignUp ? 'Establish Credentials' : 'Secure Login'}
-        </h2>
-        
-        {error && <div className="bg-red-500/10 border border-red-500/30 text-red-500 text-[10px] p-3 mb-4 rounded">{error}</div>}
-        
-        <form onSubmit={(e) => handleAuth(e, isSignUp ? 'Signup' : 'Login')} className="space-y-4">
-          <div>
-            <label className="text-[10px] text-zinc-500 uppercase tracking-widest">Operator ID (Username)</label>
-            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 p-2 mt-1 text-white text-sm outline-none focus:border-orange-500" placeholder="e.g. Admin1" />
-          </div>
-          <div>
-            <label className="text-[10px] text-zinc-500 uppercase tracking-widest">Access Key (Password)</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-zinc-900 border border-zinc-800 p-2 mt-1 text-white text-sm outline-none focus:border-orange-500" placeholder="••••••••" />
-          </div>
-          <button type="submit" className="w-full py-3 bg-orange-500/10 text-orange-500 border border-orange-500/30 hover:bg-orange-500/20 uppercase tracking-widest text-xs font-bold mt-4">
-            {isSignUp ? 'Register Identity' : 'Authenticate'}
-          </button>
-        </form>
+      {/* Background decorations */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-emerald-900/10 rounded-full blur-[100px] pointer-events-none" />
+      
+      <div className="z-10 text-center mb-12">
+        <Shield className="w-20 h-20 text-emerald-500 mb-6 mx-auto animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.3)] rounded-full" />
+        <h1 className="text-5xl font-bold text-white tracking-widest uppercase mb-3 drop-shadow-[0_0_10px_rgba(255,255,255,0.2)]">Shadow<span className="text-emerald-500">SCAN</span></h1>
+        <p className="text-zinc-500 tracking-[0.3em] text-xs max-w-lg mx-auto">AUTONOMOUS THREAT INTELLIGENCE ENGINE</p>
+      </div>
 
-        <div className="mt-6 border-t border-zinc-800 pt-4 flex flex-col space-y-3">
-          <button onClick={(e) => handleAuth(e, 'Demo')} className="w-full py-2 bg-zinc-900 text-cyan-500 border border-zinc-800 hover:border-cyan-500/50 uppercase tracking-widest text-[10px]">
-            Enter Demo Mode (Guest)
-          </button>
-          <button onClick={() => { setIsSignUp(!isSignUp); setError(''); }} className="text-[10px] text-zinc-500 hover:text-white uppercase tracking-widest text-center">
-            {isSignUp ? 'Switch to Login' : 'Create New Account'}
-          </button>
+      <div className="z-10 grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl w-full">
+        {/* Demo Mode Window */}
+        <div 
+          onClick={() => handleModeSelection('Demo')}
+          className="group cursor-pointer bg-black/40 border border-amber-500/20 hover:border-amber-500/60 hover:bg-amber-500/5 p-8 rounded-xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(245,158,11,0.15)] flex flex-col h-full"
+        >
+          <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <Activity className="w-6 h-6 text-amber-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-zinc-100 uppercase tracking-wider mb-2">Demo Mode</h2>
+          <p className="text-zinc-400 text-sm leading-relaxed mb-6 flex-1 font-sans">
+            Analyze the features and capabilities of our project in a safe, simulated environment. Features synthetic threat data and mock visualizations.
+          </p>
+          <div className="flex items-center text-amber-500 text-xs font-bold uppercase tracking-widest mt-auto">
+            Initialize Demo <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+          </div>
         </div>
+
+        {/* Live Mode Window */}
+        <div 
+          onClick={() => handleModeSelection('Live')}
+          className="group cursor-pointer bg-black/40 border border-emerald-500/20 hover:border-emerald-500/60 hover:bg-emerald-500/5 p-8 rounded-xl backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(16,185,129,0.15)] flex flex-col h-full"
+        >
+          <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            <Zap className="w-6 h-6 text-emerald-500" />
+          </div>
+          <h2 className="text-2xl font-bold text-zinc-100 uppercase tracking-wider mb-2">Live Mode</h2>
+          <p className="text-zinc-400 text-sm leading-relaxed mb-6 flex-1 font-sans">
+            Connect directly to live local interfaces. Monitor real-time network traffic, active sessions, and live threat detection feeds.
+          </p>
+          <div className="flex items-center text-emerald-500 text-xs font-bold uppercase tracking-widest mt-auto">
+            Engage System <ChevronRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </div>
+      </div>
+
+      <div className="z-10 mt-12">
+        <button onClick={() => setView('LOGS')} className="text-zinc-600 hover:text-zinc-400 transition-colors uppercase tracking-widest text-[10px] flex items-center">
+          <Terminal className="w-3 h-3 mr-2" /> View Auth Registry
+        </button>
       </div>
     </div>
   );

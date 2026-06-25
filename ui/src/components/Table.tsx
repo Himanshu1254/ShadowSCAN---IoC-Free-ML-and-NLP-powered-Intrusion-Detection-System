@@ -34,7 +34,7 @@ function Table<T>({ data, columns, onRowClick, emptyMessage = "No data available
                         {data.length > 0 ? (
                             data.map((row, rowIndex) => (
                                 <tr 
-                                    key={(row as any).id || rowIndex} 
+                                    key={(row as { id?: string | number }).id || rowIndex} 
                                     onClick={() => onRowClick && onRowClick(row)}
                                     className={`group transition-colors ${onRowClick ? 'cursor-pointer hover:bg-white/[0.02]' : 'hover:bg-white/[0.01]'}`}
                                 >

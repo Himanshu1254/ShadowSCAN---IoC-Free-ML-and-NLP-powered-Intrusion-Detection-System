@@ -1,3 +1,7 @@
+import threading
+
+_metrics_lock = threading.Lock()
+
 _metrics = {
     "packets": 0,
     "flows": 0,
@@ -6,10 +10,12 @@ _metrics = {
 }
 
 def set_counts(packets: int, flows: int, sessions: int, alerts: int):
-    _metrics["packets"] = packets
-    _metrics["flows"] = flows
-    _metrics["sessions"] = sessions
-    _metrics["alerts_24h"] = alerts
+    with _metrics_lock:
+        _metrics["packets"] = packets
+        _metrics["flows"] = flows
+        _metrics["sessions"] = sessions
+        _metrics["alerts_24h"] = alerts
 
 def snapshot():
-    return _metrics
+    with _metrics_lock:
+        return _metrics.copy()

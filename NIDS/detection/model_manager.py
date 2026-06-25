@@ -52,16 +52,6 @@ class ModelManager:
 
         cleaned = []
 
-        for value in raw_features:
-
-            try:
-
-                cleaned.append(float(value))
-
-            except:
-
-                cleaned.append(0.0)
-
         columns = [
             "packet_count",
             "byte_count",
@@ -75,6 +65,18 @@ class ModelManager:
             "burst_score",
             "port_is_common",
         ]
+
+        for col in columns:
+
+            value = raw_features.get(col, 0.0)
+
+            try:
+
+                cleaned.append(float(value))
+
+            except:
+
+                cleaned.append(0.0)
 
         df = pd.DataFrame([cleaned], columns=columns)
 

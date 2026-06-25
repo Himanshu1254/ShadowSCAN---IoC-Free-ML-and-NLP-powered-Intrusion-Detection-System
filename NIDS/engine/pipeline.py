@@ -6,12 +6,11 @@ from NIDS.engine.network.live_capture import LiveCapture
 from NIDS.features.flow_builder import FlowBuilder
 from NIDS.features.session_builder import SessionBuilder
 
-from Core.shadow_logging.logger import SessionLogger
+from Core.shadow_logging.logger import shadow_logger
 from Core.shadow_logging.geoip import GeoLocator
 from Core.shadow_logging.domain_resolver import DomainResolver
 
 from NIDS.detection.detector_engine import DetectorEngine
-
 
 class Pipeline:
 
@@ -22,6 +21,9 @@ class Pipeline:
         interface=None,
         packet_limit=100
     ):
+
+        self._interface = interface
+        self.packet_limit = packet_limit
 
         project_root = os.path.abspath(
             os.path.join(
@@ -52,9 +54,11 @@ class Pipeline:
         else:
 
             self.reader = LiveCapture(
-                interface=interface,
-                packet_limit=packet_limit
+                interface=self._interface,
+                packet_limit=self.packet_limit
             )
+
+        # (Moved property to bottom of class)
 
         # --------------------------------------------------
         # CORE MODULES
@@ -64,7 +68,7 @@ class Pipeline:
 
         self.session_builder = SessionBuilder()
 
-        self.logger = SessionLogger()
+        self.logger = shadow_logger
 
         self.geoip = GeoLocator()
 
@@ -72,7 +76,20 @@ class Pipeline:
 
         self.detector = DetectorEngine()
 
-        print("🚀 Pipeline initialized")
+        self.logger.log_pipeline("Pipeline initialized")
+
+    @property
+    def interface(self):
+        return self._interface
+
+    @interface.setter
+    def interface(self, value):
+        self._interface = value
+        if self.mode == "live":
+            self.reader = LiveCapture(
+                interface=self._interface,
+                packet_limit=self.packet_limit
+            )
 
     # --------------------------------------------------
     # SMART NLP EXPLANATIONS
@@ -151,24 +168,26 @@ class Pipeline:
         # --------------------------------------------------
 
         for pkt in raw_packets:
-
             try:
-
                 if pkt.haslayer("IP"):
+                    src_port = 0
+                    dst_port = 0
+                    if pkt.haslayer("TCP"):
+                        src_port = pkt["TCP"].sport
+                        dst_port = pkt["TCP"].dport
+                    elif pkt.haslayer("UDP"):
+                        src_port = pkt["UDP"].sport
+                        dst_port = pkt["UDP"].dport
 
                     packets.append({
-
                         "timestamp": float(pkt.time),
-
                         "src_ip": pkt["IP"].src,
-
                         "dst_ip": pkt["IP"].dst,
-
+                        "src_port": src_port,
+                        "dst_port": dst_port,
                         "protocol": pkt["IP"].proto,
-
                         "packet_len": len(pkt)
                     })
-
             except Exception:
                 continue
 
@@ -272,6 +291,34 @@ class Pipeline:
         self.logger.log_alerts(
             enriched_alerts
         )
+
+        # --------------------------------------------------
+        # ADDITIONAL ENRICHMENT FOR VISUALIZATIONS
+        # --------------------------------------------------
+
+        for pkt in packets:
+            src_c = self.geoip.get_country(pkt.get("src_ip", ""))
+            dst_c = self.geoip.get_country(pkt.get("dst_ip", ""))
+            pkt["src_country"] = src_c
+            pkt["dst_country"] = dst_c
+            pkt["src_coords"] = self.geoip.get_coordinates(src_c)
+            pkt["dst_coords"] = self.geoip.get_coordinates(dst_c)
+
+        for f in flows:
+            src_c = self.geoip.get_country(f.get("src_ip", ""))
+            dst_c = self.geoip.get_country(f.get("dst_ip", ""))
+            f["src_country"] = src_c
+            f["dst_country"] = dst_c
+            f["src_coords"] = self.geoip.get_coordinates(src_c)
+            f["dst_coords"] = self.geoip.get_coordinates(dst_c)
+
+        for s in sessions:
+            src_c = self.geoip.get_country(s.get("src_ip", ""))
+            dst_c = self.geoip.get_country(s.get("dst_ip", ""))
+            s["src_country"] = src_c
+            s["dst_country"] = dst_c
+            s["src_coords"] = self.geoip.get_coordinates(src_c)
+            s["dst_coords"] = self.geoip.get_coordinates(dst_c)
 
         # --------------------------------------------------
         # RETURN

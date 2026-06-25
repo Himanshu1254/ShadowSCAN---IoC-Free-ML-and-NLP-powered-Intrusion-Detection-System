@@ -26,7 +26,7 @@ class SessionBuilder:
 
             if key not in self.sessions:
                 self.sessions[key] = {
-                    "session_id": f"{key[0]}:{key[2]}->{key[1]}:{key[3]}-{key[4]}",
+                    "session_key": f"{key[0]}:{key[2]}->{key[1]}:{key[3]}-{key[4]}",
                     "src_ip": key[0],
                     "dst_ip": key[1],
                     "src_port": key[2],
@@ -53,9 +53,13 @@ class SessionBuilder:
         expired_keys = []
 
         for key, s in self.sessions.items():
+            s["duration"] = round(max(0.001, s["end_time"] - s["start_time"]), 3)
             if now - s["last_seen"] <= self.session_timeout:
+                s["status"] = "Active"
                 active_sessions.append(s)
             else:
+                s["status"] = "Closed"
+                active_sessions.append(s)
                 expired_keys.append(key)
 
         # cleanup

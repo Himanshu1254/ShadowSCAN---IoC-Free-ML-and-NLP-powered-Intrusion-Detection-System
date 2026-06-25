@@ -2,8 +2,18 @@ import os
 import csv
 import uuid
 import json
-
+import sys
 from datetime import datetime
+from loguru import logger
+
+# --- Unified Loguru Configuration ---
+logger.remove()
+logger.add(sys.stderr, level="INFO", colorize=True, format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>")
+logger.add("logs/system.log", rotation="50 MB", level="INFO")
+logger.add("logs/threats.log", rotation="10 MB", level="WARNING", filter=lambda record: "ALERT" in record["extra"])
+logger.add("logs/errors.log", rotation="10 MB", level="ERROR")
+logger.add("logs/performance.log", rotation="10 MB", level="DEBUG", filter=lambda record: "PERF" in record["extra"])
+
 
 
 class SessionLogger:
@@ -42,7 +52,7 @@ class SessionLogger:
 
             self.init_files()
 
-        print("🔥 Logger initialized")
+        logger.success("Logger initialized")
 
     # --------------------------------------------------
 
@@ -56,8 +66,7 @@ class SessionLogger:
 
         except Exception as e:
 
-            print("[LOGGER CONFIG ERROR]")
-            print(e)
+            logger.error(f"[LOGGER CONFIG ERROR] {e}")
 
             return {"enabled": True, "interval": "hourly"}
 
@@ -90,8 +99,7 @@ class SessionLogger:
 
         except Exception as e:
 
-            print("[LOGGER FOLDER SCAN ERROR]")
-            print(e)
+            logger.error(f"[LOGGER FOLDER SCAN ERROR] {e}")
 
         # 🔥 CREATE NEW SESSION FOLDER
         unique_id = str(uuid.uuid4())[:4]
@@ -164,8 +172,7 @@ class SessionLogger:
 
         except Exception as e:
 
-            print("[LOGGER INIT ERROR]")
-            print(e)
+            logger.error(f"[LOGGER INIT ERROR] {e}")
 
     # --------------------------------------------------
 
@@ -191,12 +198,11 @@ class SessionLogger:
             with open(file_path, "w") as f:
                 f.writelines(trimmed)
 
-            print(f"[LOGGER] Trimmed {file_path}")
+            logger.info(f"Trimmed {file_path}")
 
         except Exception as e:
 
-            print("[LOGGER TRIM ERROR]")
-            print(e)
+            logger.error(f"[LOGGER TRIM ERROR] {e}")
 
     # --------------------------------------------------
 
@@ -231,8 +237,7 @@ class SessionLogger:
 
         except Exception as e:
 
-            print("[LOGGER ALERT ERROR]")
-            print(e)
+            logger.error(f"[LOGGER ALERT ERROR] {e}")
 
     # --------------------------------------------------
 
@@ -267,8 +272,7 @@ class SessionLogger:
 
         except Exception as e:
 
-            print("[LOGGER SESSION ERROR]")
-            print(e)
+            logger.error(f"[LOGGER SESSION ERROR] {e}")
 
     # --------------------------------------------------
 
@@ -301,5 +305,39 @@ class SessionLogger:
 
         except Exception as e:
 
-            print("[LOGGER FLOW ERROR]")
-            print(e)
+            logger.error(f"[LOGGER FLOW ERROR] {e}")
+
+
+class ShadowLogger:
+    def __init__(self):
+        self.csv_logger = SessionLogger()
+
+    def log_pipeline(self, msg):
+        logger.info(f"[PIPELINE] {msg}")
+
+    def log_packet(self, packet):
+        logger.debug(f"[PACKET] {packet.get('src_ip')} -> {packet.get('dst_ip')} | Proto: {packet.get('protocol')}")
+
+    def log_alerts(self, alerts):
+        self.csv_logger.log_alerts(alerts)
+        for a in alerts:
+            alert_logger = logger.bind(ALERT=True)
+            alert_logger.warning(f"[THREAT DETECTED] {a.get('attack_type')} from {a.get('src_ip')} to {a.get('dst_ip')} | Severity: {a.get('severity')}")
+
+    def log_performance(self, metrics):
+        perf_logger = logger.bind(PERF=True)
+        perf_logger.debug(f"[PERF] {metrics}")
+
+    def log_error(self, msg):
+        logger.error(msg)
+
+    def log_exception(self, e):
+        logger.exception(e)
+        
+    def log_flows(self, flows):
+        self.csv_logger.log_flows(flows)
+        
+    def log_sessions(self, sessions):
+        self.csv_logger.log_sessions(sessions)
+
+shadow_logger = ShadowLogger()

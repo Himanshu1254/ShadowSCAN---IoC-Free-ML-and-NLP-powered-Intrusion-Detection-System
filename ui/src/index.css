@@ -6,7 +6,7 @@
 
 @layer base {
   body {
-    @apply bg-[#09090b] text-zinc-300 antialiased selection:bg-zinc-800 selection:text-white;
+    @apply bg-[#030712] text-zinc-300 antialiased selection:bg-cyan-500/30 selection:text-white;
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -43,7 +43,15 @@
 @layer utilities {
   /* Minimal Glass Panels */
   .glass-panel {
-    @apply bg-gray-900/40 backdrop-blur-md border border-gray-700/50 shadow-lg rounded-md;
+    @apply bg-transparent border border-[#1e293b] rounded-none;
+  }
+  
+  .cyber-panel {
+    @apply bg-[#030712]/50 border border-[#1e293b] rounded-none relative;
+  }
+  
+  .cyber-title {
+    @apply text-[10px] text-zinc-500 font-mono uppercase tracking-widest mb-3 flex items-center gap-2;
   }
   
   /* Tier UI Colors */

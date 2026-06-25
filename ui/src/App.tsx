@@ -6,11 +6,11 @@ import Overview from './pages/Overview';
 import Flows from './pages/Flows';
 import Sessions from './pages/Sessions';
 import Intelligence from './pages/Intelligence';
-import Ingestion from './pages/Ingestion';
 import AlertOverview from './pages/AlertOverview';
 import HIDS from './pages/HIDS';
 import SystemHealth from './pages/SystemHealth';
 import Settings from './pages/Settings';
+import Login from './Login';
 
 const App: React.FC = () => {
   const [isBooting, setIsBooting] = useState(true);
@@ -56,18 +56,24 @@ const App: React.FC = () => {
   return (
     <DemoProvider>
       <Routes>
-      <Route path="/" element={<Layout />}>
-        <Route index element={<Overview />} />
-        <Route path="flows" element={<Flows />} />
-        <Route path="sessions" element={<Sessions />} />
-        <Route path="intelligence" element={<Intelligence />} />
-        <Route path="ingestion" element={<Ingestion />} />
-        <Route path="alert/:id" element={<AlertOverview />} />
-        <Route path="hids" element={<HIDS />} />
-        <Route path="health" element={<SystemHealth />} />
-        <Route path="settings" element={<Settings />} />
-      </Route>
-    </Routes>
+        {/* Public Login Route */}
+        <Route path="/login" element={<Login />} />
+        
+        {/* Protected App Routes */}
+        <Route path="/app" element={<Layout />}>
+          <Route index element={<Overview />} />
+          <Route path="flows" element={<Flows />} />
+          <Route path="sessions" element={<Sessions />} />
+          <Route path="intelligence" element={<Intelligence />} />
+          <Route path="alert/:id" element={<AlertOverview />} />
+          <Route path="hids" element={<HIDS />} />
+          <Route path="health" element={<SystemHealth />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
+        
+        {/* Default Redirect */}
+        <Route path="*" element={<Login />} />
+      </Routes>
     </DemoProvider>
   );
 };

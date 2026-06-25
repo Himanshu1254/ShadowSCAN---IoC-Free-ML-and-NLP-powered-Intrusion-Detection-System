@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.ensemble import IsolationForest
 
 
-MODEL_PATH = "models/anomaly_model.pkl"
+MODEL_PATH = "models/session_anomaly_model.pkl"
 
 
 class MLDetector:

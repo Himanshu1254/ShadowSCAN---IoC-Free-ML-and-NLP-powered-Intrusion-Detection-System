@@ -84,7 +84,8 @@ const SystemHealth: React.FC = () => {
     };
 
     useEffect(() => {
-        fetchAll();
+        // Wrap in setTimeout to avoid synchronous setState inside effect body
+        setTimeout(fetchAll, 0);
         const iv = setInterval(fetchAll, 3000);
         return () => clearInterval(iv);
     }, []);

@@ -1,1 +1,1 @@
-print("🚀 Pipeline initialized")
+print("[*] Pipeline initialized")

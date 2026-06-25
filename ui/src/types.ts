@@ -12,6 +12,8 @@ export interface Flow {
   packet_count?: number;
   byte_count?: number;
   timestamp?: string;
+  src_country?: string;
+  dst_country?: string;
 }
 
 export interface Session {

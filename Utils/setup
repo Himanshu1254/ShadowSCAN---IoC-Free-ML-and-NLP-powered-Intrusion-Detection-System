@@ -9,7 +9,7 @@ venv\Scripts\activate
 
 ▶️ Start Backend (FastAPI)
 
-uvicorn Core.api.main:app --reload
+uvicorn Core.api.main:app --reload --port 8001
 
 
 

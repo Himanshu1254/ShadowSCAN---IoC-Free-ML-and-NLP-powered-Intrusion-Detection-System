@@ -78,7 +78,7 @@ class FIMEventHandler(FileSystemEventHandler):
 
 def run_fim_observer():
     os.makedirs(MONITOR_DIR, exist_ok=True)
-    print(f"\n[🛡️] FIM ENGINE ONLINE: Watching -> {MONITOR_DIR}")
+    print(f"\n[*] FIM ENGINE ONLINE: Watching -> {MONITOR_DIR}")
 
     event_handler = FIMEventHandler()
     observer = Observer()

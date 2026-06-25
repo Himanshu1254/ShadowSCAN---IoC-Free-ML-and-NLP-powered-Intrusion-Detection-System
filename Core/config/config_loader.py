@@ -14,7 +14,7 @@ def load_detection_config():
 
     except Exception as e:
 
-        print("[CONFIG ERROR]")
-        print(e)
+        from Core.shadow_logging.logger import shadow_logger
+        shadow_logger.log_error(f"[CONFIG ERROR] {e}")
 
         return {}

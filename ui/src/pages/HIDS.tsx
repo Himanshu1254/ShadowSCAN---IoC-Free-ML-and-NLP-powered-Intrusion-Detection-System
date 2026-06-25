@@ -18,7 +18,9 @@ const ProcessMonitor: React.FC = () => {
             try {
                 const res = await apiClient.get<ProcessSnapshot>('/hids/processes');
                 setData(res.data);
-            } catch { } finally {
+            } catch (err) {
+                console.error(err);
+            } finally {
                 setLoading(false);
             }
         };
@@ -137,7 +139,9 @@ const FimMonitor: React.FC = () => {
             try {
                 const res = await apiClient.get<FimAlert[]>('/hids/fim');
                 setAlerts(res.data);
-            } catch { } finally {
+            } catch (err) {
+                console.error(err);
+            } finally {
                 setLoading(false);
             }
         };
@@ -217,7 +221,9 @@ const ServicesMonitor: React.FC = () => {
             try {
                 const res = await apiClient.get<WindowsService[]>('/hids/services');
                 setServices(res.data);
-            } catch { } finally {
+            } catch (err) {
+                console.error(err);
+            } finally {
                 setLoading(false);
             }
         };

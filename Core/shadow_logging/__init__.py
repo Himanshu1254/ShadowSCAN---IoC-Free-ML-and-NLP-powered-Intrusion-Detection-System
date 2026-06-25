@@ -1,1 +1,1 @@
-print("🔥 Logger initialized")
+# Unified logger module

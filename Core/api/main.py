@@ -6,15 +6,18 @@ import time
 import shutil
 import os
 import httpx
-import asyncio
 import logging
 import sys
 
 # --- NIDS IMPORTS ---
 from NIDS.engine.pipeline import Pipeline
-from NIDS.engine.runtime_state import state
+from NIDS.engine.runtime_state import state, state_manager
 from Core.metrics import set_counts, snapshot
 from Core.shadow_logging.log_analyzer import LogAnalyzer
+
+# --- MODE MANAGEMENT ---
+from Core.mode_manager import mode_manager
+from Core.demo_provider import demo_provider
 
 # --- INTELLIGENCE MODULES ---
 from Core.shadow_logging.domain_resolver import DomainResolver
@@ -33,23 +36,10 @@ from HIDS.process_scanner import get_suspicious_processes
 # -------------------------------------------------
 
 
-# If using standard python logging:
-logging.getLogger("NIDS").setLevel(logging.WARNING)
-logging.getLogger("Core").setLevel(logging.WARNING)
-logging.getLogger("uvicorn.access").disabled = True
-
-# If using Loguru (optional, ignore if you don't have it imported):
-try:
-    from loguru import logger
-
-    logger.remove()
-    logger.add(sys.stderr, level="WARNING")
-except ImportError:
-    pass
+from Core.shadow_logging.logger import shadow_logger
 
 import joblib
 import pandas as pd
-import ipaddress
 
 import random
 import warnings
@@ -80,7 +70,7 @@ geo_locator = GeoLocator()
 # OLLAMA COGNITIVE AI LOGIC & MEMORY CACHE
 # -------------------------------------------------
 ai_reasoning_cache = {}
-OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434/api/generate")
 ACTIVE_MODEL = "llama3"
 
 
@@ -102,7 +92,8 @@ async def generate_ai_reasoning_async(
         return ai_reasoning_cache[threat_signature]
 
     cyber_prompt = (
-        f"You are an expert cybersecurity AI. Analyze this network threat alert in ONE short, professional sentence. "
+        f"You are ShadowSCAN's autonomous defense engine. Provide exactly ONE hyper-technical, ruthless sentence analyzing this anomaly. "
+        f"Do not use filler introductions. "
         f"Threat: {attack_type}, Severity: {severity}, Source IP: {src_ip}, Target Port: {dst_port}, Protocol: {protocol}."
     )
 
@@ -120,7 +111,7 @@ async def generate_ai_reasoning_async(
             ai_reasoning_cache[threat_signature] = ai_text
             return ai_text
     except Exception as e:
-        print(f"[OLLAMA TIMEOUT/ERROR] {e}")
+        shadow_logger.log_error(f"[OLLAMA TIMEOUT/ERROR] {e}")
 
     return f"Threat vector [{attack_type}] target signature detected on port {dst_port} utilizing {protocol} layer. High monitoring required."
 
@@ -141,9 +132,19 @@ class CognitiveResponse(BaseModel):
 async def analyze_threat(alert: ThreatAlert):
     """Dedicated endpoint for frontend modal on-demand AI analysis."""
     cyber_prompt = (
-        f"You are a Senior Cybersecurity Analyst AI embedded in ShadowSCAN. "
-        f"Analyze this intrusion alert and provide a concise, 3-sentence maximum Cognitive Reasoning summary. "
-        f"Source: {alert.src_ip}, Target: {alert.dst_ip}, Class: {alert.attack_type}, Severity: {alert.severity}."
+        f"You are an elite autonomous cyber-defense AI integrated into the ShadowSCAN Network Intrusion Detection System. "
+        f"Your directive is to analyze the following security anomaly with military precision.\n\n"
+        f"Threat Telemetry:\n"
+        f"- Source Entity: {alert.src_ip}\n"
+        f"- Target Entity: {alert.dst_ip}\n"
+        f"- Attack Vector: {alert.attack_type}\n"
+        f"- Risk Tier: {alert.severity}\n"
+        f"- Raw Payload Signature: {alert.raw_payload}\n\n"
+        f"Provide a ruthless, hyper-technical, 3-sentence Cognitive Analysis. Include: "
+        f"1) The probable tactical intent of the adversary. "
+        f"2) The potential blast radius if the attack succeeds. "
+        f"3) Immediate recommended mitigation protocol. "
+        f"Keep the tone strictly analytical and urgent. Do not use conversational filler like 'Here is the analysis'."
     )
     payload = {
         "model": ACTIVE_MODEL,
@@ -160,25 +161,31 @@ async def analyze_threat(alert: ThreatAlert):
                 reasoning=response.json().get("response", "Analysis failed.")
             )
     except httpx.ConnectError:
-        raise HTTPException(
-            status_code=503,
-            detail="Ollama Engine offline. Ensure localhost:11434 is running.",
+        # Fallback heuristic if Ollama is unavailable
+        fallback_reasoning = (
+            f"[HEURISTIC ENGINE ACTIVE - OLLAMA OFFLINE] "
+            f"Adversary from {alert.src_ip} is exhibiting characteristics of a {alert.attack_type} vector directed at {alert.dst_ip}. "
+            f"If successful, this {alert.severity} tier threat could compromise external perimeter defenses. "
+            f"Immediate mitigation protocol: Isolate the source IP at the firewall edge and perform deep packet inspection."
         )
+        return CognitiveResponse(reasoning=fallback_reasoning)
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Intelligence Core Error: {str(e)}"
+        fallback_reasoning = (
+            f"[HEURISTIC ENGINE ACTIVE - LLM ERROR] "
+            f"Adversary from {alert.src_ip} is exhibiting characteristics of a {alert.attack_type} vector. "
+            f"Immediate mitigation protocol: Isolate the source IP at the firewall edge and perform deep packet inspection. "
+            f"(Error: {str(e)})"
         )
+        return CognitiveResponse(reasoning=fallback_reasoning)
 
 
 # -------------------------------------------------
 # Background Loop
 # -------------------------------------------------
-# Add this variable right above the function
-# Make sure this is at the top of your file
 
 pipeline_sweeps = 0
 total_packets = 0  # Keeps a running tally of total ingested packets
-
+pipeline_shutdown_event = threading.Event()
 
 def pipeline_loop():
     global pipeline_sweeps, total_packets
@@ -188,7 +195,7 @@ def pipeline_loop():
 
     # --- STATIC BOOT SEQUENCE (Prints Once & Freezes at the Top) ---
     print("\n" + "=" * 60)
-    print(" 🛡️  SHADOWSCAN INTELLIGENCE CORE : ONLINE")
+    print(" [*]  SHADOWSCAN INTELLIGENCE CORE : ONLINE")
     print("=" * 60)
     print(" [SYSTEM] Engine....... Dual-Core Architecture (NIDS/HIDS)")
     print(" [NIDS]   Interface.... Wi-Fi (Packet Capture Active)")
@@ -197,12 +204,12 @@ def pipeline_loop():
     print(" [CACHE]  Resolved..... 204 Entity Mappings (Geo-IP Online)")
     print(" [OLLAMA] AI Bridge.... Local AI Analyst Ready")
     print("-" * 60)
-    print(" [📡] Telemetry Stream Initialized...\n")
+    print(" [*] Telemetry Stream Initialized...\n")
 
     # Print 5 blank lines to reserve vertical space for the live dynamic HUD
     print("\n\n\n\n\n", end="")
 
-    while True:
+    while not pipeline_shutdown_event.is_set():
         try:
             result = pipeline.run_once()
             
@@ -248,6 +255,8 @@ def pipeline_loop():
                                 "dst_ip": pkt.get("dst_ip", "Unknown"),
                                 "protocol": proto,
                                 "country": geo_locator.get_country(pkt.get("src_ip", "127.0.0.1")),
+                                "src_coords": geo_locator.get_coordinates(geo_locator.get_country(pkt.get("src_ip", "127.0.0.1"))),
+                                "dst_coords": geo_locator.get_coordinates(geo_locator.get_country(pkt.get("dst_ip", "127.0.0.1"))),
                                 "severity": "HIGH",
                                 "confidence": "96.4%",
                                 "attack_type": "ML Anomaly",
@@ -286,19 +295,17 @@ def pipeline_loop():
             sys.stdout.write("\033[5A\033[J")
 
             hud = (
-                f" ⚡ PIPELINE SWEEP : [{pipeline_sweeps:05d}]\n"
-                f" 📦 PACKET INGEST  : {p_count} (Total Session: {total_packets})\n"
-                f" 🌊 ACTIVE FLOWS   : {f_count}\n"
-                f" 🚨 THREAT ALERTS  : {a_count}\n"
+                f" [*] PIPELINE SWEEP : [{pipeline_sweeps:05d}]\n"
+                f" [*] PACKET INGEST  : {p_count} (Total Session: {total_packets})\n"
+                f" [*] ACTIVE FLOWS   : {f_count}\n"
+                f" [*] THREAT ALERTS  : {a_count}\n"
             )
             sys.stdout.write(hud)
             sys.stdout.flush()
 
         except Exception as e:
             # Drop down a few lines so we don't overwrite the HUD with a crash log
-            print(f"\n\n[🚨 CRITICAL] PIPELINE THREAD CRASHED: {e}\n")
-
-        time.sleep(2)
+            print(f"\n\n[*] PIPELINE THREAD CRASHED: {e}\n")
 
 
 @app.on_event("startup")
@@ -310,30 +317,83 @@ def start_engines():
     # Boot HIDS FIM Engine Thread
     start_fim_engine()
 
+@app.on_event("shutdown")
+def stop_engines():
+    pipeline_shutdown_event.set()
+
+
+
+# -------------------------------------------------
+# MODE MANAGEMENT ENDPOINTS
+# -------------------------------------------------
+
+class ModeRequest(BaseModel):
+    mode: str
+
+
+@app.post("/mode")
+def set_operating_mode(body: ModeRequest):
+    """
+    Switch the dashboard between Demo Mode and Live Mode.
+    Clears all runtime state on switch so data never bleeds across modes.
+
+    POST /mode
+    Body: {"mode": "demo"} or {"mode": "live"}
+    """
+    try:
+        result = mode_manager.set_mode(body.mode)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/mode")
+def get_operating_mode():
+    """Return the current operating mode and when it was last changed."""
+    return mode_manager.get_mode()
+
 
 # -------------------------------------------------
 # NIDS API Endpoints
 # -------------------------------------------------
 @app.get("/overview/stats")
 def overview_stats():
+    """
+    Returns packet/flow/session/alert counts.
+    Demo Mode : evolving realistic stats from DemoProvider (never real counts).
+    Live Mode  : real counts from the Core metrics snapshot.
+    Routing is performed by StateManager — this endpoint has no mode logic.
+    """
     try:
-        return snapshot()
+        return state_manager.get_stats()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/flows")
 def get_flows():
+    """
+    Returns network flows.
+    Demo Mode  : replay flows from DemoProvider (realistic attack scenarios).
+    Live Mode  : flows captured by the live pipeline (LiveRuntimeState only).
+    Routing is performed by StateManager — this endpoint has no mode logic.
+    """
     try:
-        return state.flows
+        return state_manager.get_flows()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/sessions")
 def get_sessions():
+    """
+    Returns network sessions.
+    Demo Mode  : replay sessions from DemoProvider (realistic attack scenarios).
+    Live Mode  : sessions aggregated by the live pipeline (LiveRuntimeState only).
+    Routing is performed by StateManager — this endpoint has no mode logic.
+    """
     try:
-        return state.sessions
+        return state_manager.get_sessions()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -351,67 +411,28 @@ def test_pipeline():
 
 
 @app.get("/alerts")
-async def get_alerts(tier: str = "enterprise"):
+async def get_alerts():
+    """
+    Returns security alerts.
+
+    Demo Mode  : rotating attack-scenario alerts from DemoProvider
+                 (SQL Injection, Port Scan, DDoS, DNS Flood, Ransomware, Botnet).
+                 Reads are routed by StateManager — DemoRuntimeState.update()
+                 is a sealed no-op, so live packets can never appear here.
+
+    Live Mode  : ONLY real alerts from LiveRuntimeState, geo-enriched.
+                 No mock data. No fake counts. No hardcoded IPs.
+                 DemoProvider is never called in this branch.
+    """
     try:
-        """Returns alerts with GeoIP and Domains, but defers AI Reasoning. Injects Demo Data based on User Tier."""
-        import random
-        import datetime
+        # ── Demo Mode ─────────────────────────────────────────────────────
+        if state_manager.is_demo():
+            return demo_provider.get_alerts()
 
-        # ---------------------------------------------------------
-        # DEMO DATA GENERATORS BASED ON TIER
-        # ---------------------------------------------------------
-        if tier == "student":
-            return [
-                {
-                    "id": f"EVT-EDU-{random.randint(1000, 9999)}",
-                    "src_ip": "192.168.1.105",
-                    "dst_ip": "8.8.8.8",
-                    "protocol": "DNS",
-                    "country": "Local Network",
-                    "dst_country": "United States",
-                    "src_domain": "student-laptop.local",
-                    "dst_domain": "dns.google",
-                    "severity": "LOW",
-                    "confidence": "100%",
-                    "attack_type": "Standard Query",
-                    "detected_by": "Educational Baseline",
-                    "reason": "EDUCATIONAL BREAKDOWN: This is a standard Domain Name System (DNS) query. Your computer is asking 8.8.8.8 (Google's public DNS server) to translate a human-readable website name into an IP address. This is completely safe and happens thousands of times a day.",
-                    "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
-                    "packet_length": random.randint(40, 120),
-                    "anomaly_score": round(random.uniform(1.0, 5.0), 2)
-                },
-                {
-                    "id": f"EVT-EDU-{random.randint(1000, 9999)}",
-                    "src_ip": "192.168.1.105",
-                    "dst_ip": "104.18.32.47",
-                    "protocol": "TCP",
-                    "country": "Local Network",
-                    "dst_country": "United States",
-                    "src_domain": "student-laptop.local",
-                    "dst_domain": "cloudflare.com",
-                    "severity": "LOW",
-                    "confidence": "100%",
-                    "attack_type": "HTTPS Handshake",
-                    "detected_by": "Educational Baseline",
-                    "reason": "EDUCATIONAL BREAKDOWN: This is a TCP packet initiating a secure HTTPS connection. The destination is a Cloudflare server, likely hosting a website you're trying to visit. The 'Length' indicates the size of the cryptographic handshake data.",
-                    "timestamp": (datetime.datetime.now() - datetime.timedelta(seconds=2)).strftime("%H:%M:%S"),
-                    "packet_length": random.randint(500, 1500),
-                    "anomaly_score": round(random.uniform(1.0, 5.0), 2)
-                }
-            ]
-
-        elif tier == "personal":
-            # Serene environment with 0 alerts
-            return []
-
-        # ---------------------------------------------------------
-        # LIVE / ENTERPRISE DATA GENERATOR
-        # ---------------------------------------------------------
-        raw_alerts = (
-            state.alerts.slice(-100)
-            if hasattr(state.alerts, "slice")
-            else state.alerts[-100:]
-        )
+        # ── Live Mode ─────────────────────────────────────────────────────
+        # StateManager.get_live_alerts() reads from LiveRuntimeState only.
+        # It never touches DemoRuntimeState or DemoProvider.
+        raw_alerts = state_manager.get_live_alerts(limit=100)
         enriched_alerts = []
 
         for alert in raw_alerts:
@@ -419,79 +440,21 @@ async def get_alerts(tier: str = "enterprise"):
             src_ip = enriched.get("src_ip", "")
             dst_ip = enriched.get("dst_ip", "")
 
-            # Geolocation & Mapping Enrichment
-            enriched["country"] = geo_locator.get_country(src_ip)
+            # Geolocation & Domain Enrichment
+            enriched["country"]     = geo_locator.get_country(src_ip)
             enriched["dst_country"] = geo_locator.get_country(dst_ip)
-            enriched["src_domain"] = domain_resolver.resolve(src_ip)
-            enriched["dst_domain"] = domain_resolver.resolve(dst_ip)
+            enriched["src_coords"]  = geo_locator.get_coordinates(enriched["country"])
+            enriched["dst_coords"]  = geo_locator.get_coordinates(enriched["dst_country"])
+            enriched["src_domain"]  = domain_resolver.resolve(src_ip)
+            enriched["dst_domain"]  = domain_resolver.resolve(dst_ip)
 
-            # Set a placeholder for the reason. The frontend will fetch the real one.
             if "reason" not in enriched:
                 enriched["reason"] = "AI Analysis Pending... Click to generate."
 
             enriched_alerts.append(enriched)
 
-        if tier == "enterprise":
-            # Prepend sophisticated mock multi-vector attacks to the live stream
-            mock_enterprise_alerts = [
-                {
-                    "id": f"EVT-ENT-{random.randint(1000, 9999)}",
-                    "src_ip": "185.150.117.44",
-                    "dst_ip": "10.0.0.5",
-                    "protocol": "TCP",
-                    "country": "Russia",
-                    "dst_country": "Internal DMZ",
-                    "src_domain": "unknown-host.ru",
-                    "dst_domain": "db-server-01.local",
-                    "severity": "CRITICAL",
-                    "confidence": "99.8%",
-                    "attack_type": "SQL Injection Fingerprint Matching",
-                    "detected_by": "XGBoost Core + Signature",
-                    "reason": "CRITICAL THREAT DETECTED: Payload matches known SQLi signature patterns attempting to bypass authentication via tautology injections (' OR 1=1 --). Immediate firewall block recommended.",
-                    "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
-                    "packet_length": random.randint(800, 2000),
-                    "anomaly_score": round(random.uniform(95.0, 99.9), 2)
-                },
-                {
-                    "id": f"EVT-ENT-{random.randint(1000, 9999)}",
-                    "src_ip": "45.133.192.10",
-                    "dst_ip": "10.0.0.12",
-                    "protocol": "UDP",
-                    "country": "China",
-                    "dst_country": "Internal Network",
-                    "src_domain": "botnet-node.cn",
-                    "dst_domain": "workstation-12.local",
-                    "severity": "HIGH",
-                    "confidence": "94.5%",
-                    "attack_type": "DDoS Threshold Breach",
-                    "detected_by": "RandomForest Volume Analyzer",
-                    "reason": "HIGH THREAT DETECTED: UDP flood sequence originating from a known botnet subnet. Volume exceeds baseline threshold by 4,000%. Suggesting upstream rate-limiting.",
-                    "timestamp": (datetime.datetime.now() - datetime.timedelta(seconds=4)).strftime("%H:%M:%S"),
-                    "packet_length": random.randint(40, 64),
-                    "anomaly_score": round(random.uniform(90.0, 96.0), 2)
-                },
-                {
-                    "id": f"EVT-ENT-{random.randint(1000, 9999)}",
-                    "src_ip": "10.0.0.12",
-                    "dst_ip": "10.0.0.250",
-                    "protocol": "SMB",
-                    "country": "Internal Network",
-                    "dst_country": "Internal Storage",
-                    "src_domain": "workstation-12.local",
-                    "dst_domain": "nas-backup-01.local",
-                    "severity": "CRITICAL",
-                    "confidence": "98.2%",
-                    "attack_type": "Ransomware Cryptographic Directory Sweep",
-                    "detected_by": "Isolation Forest (Anomaly Model)",
-                    "reason": "CRITICAL THREAT DETECTED: Highly anomalous lateral movement via SMB. Endpoint is rapidly scanning and modifying files on the NAS, indicating active ransomware encryption phase.",
-                    "timestamp": (datetime.datetime.now() - datetime.timedelta(seconds=8)).strftime("%H:%M:%S"),
-                    "packet_length": random.randint(3000, 8000),
-                    "anomaly_score": round(random.uniform(97.0, 99.9), 2)
-                }
-            ]
-            return mock_enterprise_alerts + enriched_alerts
-
         return enriched_alerts
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -502,78 +465,7 @@ def get_unverified_intel():
     return domain_resolver.get_all_unverified()
 
 
-@app.post("/upload-log")
-async def upload_log(file: UploadFile = File(...)):
-    upload_dir = "Data/uploaded_logs"
-    os.makedirs(upload_dir, exist_ok=True)
-    safe_filename = file.filename if file.filename else "unnamed_upload.log"
-    file_path = os.path.join(upload_dir, safe_filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    analyzer = LogAnalyzer(file_path)
-    return {"summary": analyzer.get_summary(), "report": analyzer.generate_nlp_report()}
-
-
-@app.post("/api/upload_log")
-async def process_historical_log(file: UploadFile = File(...), tier: str = "enterprise"):
-    try:
-        import pandas as pd
-        from NIDS.detection.ml_model import ml_detector
-        import random
-        
-        df = pd.read_csv(file.file)
-        
-        # ---------------------------------------------------------
-        # TIER-BASED PARSING LOGIC
-        # ---------------------------------------------------------
-        if tier == "student":
-            headers_list = ", ".join(list(df.columns[:5]))
-            return {
-                "educational_insight": f"Your uploaded log file contains the following network telemetry headers: {headers_list}. In a SOC environment, these headers are mapped to numerical matrices and fed into a machine learning algorithm to detect baseline deviations.",
-                "rows_analyzed": len(df)
-            }
-            
-        elif tier == "personal":
-            suspicious_count = 0
-            # Perform a basic check for known tracking networks or internal ping sweeps
-            if 'src_ipv4' in df.columns:
-                suspicious_count = len(df[df['src_ipv4'].astype(str).str.contains('192.168|10\.|172\.', regex=True, na=False)])
-            return {
-                "status": f"Log Analysis Complete. {len(df)} total network events reviewed. {suspicious_count} internal pings or tracked telemetry points discovered. Network is secure."
-            }
-            
-        # Enterprise Tier (Default ML Anomaly Detection)
-        anomalies = []
-        for index, row in df.iterrows():
-            flow_data = row.to_dict()
-            
-            # Predict via the Isolation Forest model wrapper
-            detection = ml_detector.predict(flow_data)
-            if detection and detection.get("attack_detected"):
-                # Extract columns securely, falling back to mock addresses if the CSV is missing explicit IP columns
-                src_ip = str(flow_data.get("src_ipv4", flow_data.get("Source IP Addr", f"192.168.1.{random.randint(2, 254)}")))
-                dst_ip = str(flow_data.get("dst_ipv4", flow_data.get("Destination IP", "8.8.8.8")))
-                timestamp = str(flow_data.get("date_time", flow_data.get("Timestamp", "N/A")))
-                
-                anomalies.append({
-                    "id": f"CSV-EVT-{random.randint(1000, 9999)}",
-                    "src_ip": src_ip,
-                    "dst_ip": dst_ip,
-                    "protocol": str(flow_data.get("protocol", "TCP")),
-                    "attack_type": detection.get("attack_type", "Unknown"),
-                    "anomaly_score": round(random.uniform(90.0, 99.9), 2),
-                    "conf": "98.5%",
-                    "country": geo_locator.get_country(src_ip),
-                    "dst_domain": domain_resolver.resolve(dst_ip),
-                    "timestamp": timestamp,
-                    "reason": None
-                })
-        
-        return {"anomalies": anomalies}
-        
-    except Exception as e:
-        # Graceful fallback instead of crashing the UI
-        return {"status": f"Pipeline parsing encountered an unexpected schema error: {str(e)}"}
+# (Removed Log Upload Endpoints)
 
 
 @app.get("/health")
@@ -632,3 +524,55 @@ def api_get_gpu():
 def api_get_services():
     """Returns a list of actively running Windows services."""
     return get_active_services()
+
+# -------------------------------------------------
+# SETTINGS ENDPOINTS
+# -------------------------------------------------
+import psutil
+
+class SettingsConfig(BaseModel):
+    interface: str
+    model: str
+
+@app.get("/settings/interfaces")
+def get_interfaces():
+    interfaces = []
+    try:
+        addrs = psutil.net_if_addrs()
+        for name, _ in addrs.items():
+            interfaces.append(name)
+    except Exception:
+        pass
+    if not interfaces:
+        interfaces = ["Wi-Fi", "Ethernet", "Loopback Pseudo-Interface 1"]
+    return interfaces
+
+@app.get("/settings/models")
+def get_models():
+    models = []
+    try:
+        if os.path.exists("models"):
+            for f in os.listdir("models"):
+                if f.endswith(".pkl"):
+                    models.append(f)
+    except Exception:
+        pass
+    if not models:
+        models = ["anomaly_model.pkl"]
+    return models
+
+@app.get("/settings/config")
+def get_config():
+    return {
+        "interface": pipeline.interface if hasattr(pipeline, 'interface') else "Wi-Fi",
+        "model": "anomaly_model.pkl"
+    }
+
+@app.post("/settings/config")
+def set_config(config: SettingsConfig):
+    global pipeline
+    # Update pipeline interface
+    if hasattr(pipeline, 'interface'):
+        pipeline.interface = config.interface
+        # Note: Scapy capture restarts would need to be handled inside pipeline
+    return {"status": "success"}

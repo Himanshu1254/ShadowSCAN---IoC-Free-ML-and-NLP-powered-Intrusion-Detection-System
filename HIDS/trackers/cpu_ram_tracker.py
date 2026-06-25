@@ -15,5 +15,6 @@ def get_cpu_ram_telemetry():
 
         return {"total_cpu": round(cpu_percent, 1), "total_ram": round(ram_percent, 1)}
     except Exception as e:
-        print(f"[HIDS ERROR] CPU/RAM Tracker Failed: {e}")
+        from Core.shadow_logging.logger import shadow_logger
+        shadow_logger.log_error(f"[HIDS ERROR] CPU/RAM Tracker Failed: {e}")
         return {"total_cpu": 0, "total_ram": 0}

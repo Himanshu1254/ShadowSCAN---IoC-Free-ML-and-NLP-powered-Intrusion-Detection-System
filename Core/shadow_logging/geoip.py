@@ -42,8 +42,8 @@ class GeoLocator:
                 self.cache[ip] = country
                 return country
             except:
-                print("[GEO-IP ERROR]")
-                print(e)
+                from Core.shadow_logging.logger import shadow_logger
+                shadow_logger.log_error(f"[GEO-IP ERROR] {e}")
                 return "Unknown"
 
     # --------------------------------------------------
@@ -82,26 +82,26 @@ class GeoLocator:
         if not location or location == "Unknown" or location == "Local Network":
             return generate_mock_coords()
 
-        try:
-            import time
-            time.sleep(1.1)
-            url = "https://nominatim.openstreetmap.org/search"
-            headers = {'User-Agent': 'ShadowSCAN_Enterprise_Console_v1.0'}
-            params = {'q': location, 'format': 'json', 'limit': 1}
-            
-            res = requests.get(url, headers=headers, params=params, timeout=3)
-            res.raise_for_status()
-            
-            data = res.json()
-            if data and len(data) > 0:
-                coords = {"lat": float(data[0]["lat"]), "lon": float(data[0]["lon"])}
-                self.cache[cache_key] = coords
-                return coords
-            else:
-                return "Unknown Location"
+        def _fetch_and_cache():
+            try:
+                import time
+                time.sleep(1.1)
+                url = "https://nominatim.openstreetmap.org/search"
+                headers = {'User-Agent': 'ShadowSCAN_Enterprise_Console_v1.0'}
+                params = {'q': location, 'format': 'json', 'limit': 1}
                 
-        except (requests.exceptions.RequestException, Exception):
-            # Immediately suppress the exception and fall back to a safe string
-            fallback = "Unknown Location"
-            self.cache[cache_key] = fallback
-            return fallback
+                res = requests.get(url, headers=headers, params=params, timeout=3)
+                res.raise_for_status()
+                
+                data = res.json()
+                if data and len(data) > 0:
+                    coords = {"lat": float(data[0]["lat"]), "lon": float(data[0]["lon"])}
+                    self.cache[cache_key] = coords
+                else:
+                    self.cache[cache_key] = "Unknown Location"
+            except:
+                self.cache[cache_key] = "Unknown Location"
+
+        import threading
+        threading.Thread(target=_fetch_and_cache, daemon=True).start()
+        return generate_mock_coords()

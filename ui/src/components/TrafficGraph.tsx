@@ -1,13 +1,17 @@
 import { useEffect, useState } from "react";
 
-const TrafficGraph = ({ alerts }: { alerts: any[] }) => {
+const TrafficGraph = ({ alerts }: { alerts: unknown[] }) => {
   const [history, setHistory] = useState<number[]>([]);
 
   useEffect(() => {
-    setHistory((prev) => {
-      const updated = [...prev, alerts.length];
-      return updated.slice(-30);
-    });
+    // Avoid synchronous setState in effect
+    const timeout = setTimeout(() => {
+      setHistory((prev) => {
+        const updated = [...prev, alerts.length];
+        return updated.slice(-30);
+      });
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [alerts]);
 
   const max = Math.max(...history, 1);

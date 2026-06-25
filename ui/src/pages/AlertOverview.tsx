@@ -9,8 +9,8 @@ const AlertOverview: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const [alert, setAlert] = useState<any>(location.state?.alert || null);
-    const [relatedFlows, setRelatedFlows] = useState<any[]>([]);
+    const [alert, setAlert] = useState<unknown>(location.state?.alert || null);
+    const [relatedFlows, setRelatedFlows] = useState<unknown[]>([]);
 
     useEffect(() => {
         if (!alert) {
@@ -24,7 +24,7 @@ const AlertOverview: React.FC = () => {
         if (alert) {
             apiClient.get('/flows').then(res => {
                 const correlated = res.data
-                    .filter((f: any) => f.src_ip === alert.src_ip || f.dst_ip === alert.dst_ip)
+                    .filter((f: unknown) => f.src_ip === alert.src_ip || f.dst_ip === alert.dst_ip)
                     .slice(0, 5);
                 setRelatedFlows(correlated);
             });
@@ -32,7 +32,7 @@ const AlertOverview: React.FC = () => {
     }, [alert]);
 
     const flowColumns = [
-        { header: 'Timestamp', accessor: (row: any) => <span className="text-zinc-500 text-xs font-mono">{row.timestamp || 'N/A'}</span> },
+        { header: 'Timestamp', accessor: (row: unknown) => <span className="text-zinc-500 text-xs font-mono">{row.timestamp || 'N/A'}</span> },
         { header: 'Src IP', accessor: 'src_ip' },
         { header: 'Dst IP', accessor: 'dst_ip' },
         { header: 'Proto', accessor: 'protocol' },

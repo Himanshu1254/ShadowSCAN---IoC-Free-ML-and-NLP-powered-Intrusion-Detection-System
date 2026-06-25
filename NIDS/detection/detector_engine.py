@@ -1,4 +1,4 @@
-from NIDS.detection.ml_model import MLModel
+from NIDS.detection.ml_detector import MLDetector
 from Core.config.config_loader import load_detection_config
 from Core.notifications.windows_notifier import WindowsNotifier
 from Core.shadow_logging.geoip import GeoLocator
@@ -19,7 +19,7 @@ class DetectorEngine:
         self.config = load_detection_config()
         self.notifier = WindowsNotifier()
         self.thresholds = self.config.get("thresholds", {})
-        self.ml = MLModel()
+        self.ml = MLDetector()
         self.model_manager = ModelManager()
 
         # Initialize Llama 3 AI Analyst

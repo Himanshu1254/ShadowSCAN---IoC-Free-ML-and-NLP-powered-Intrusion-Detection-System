@@ -7,17 +7,17 @@ import {
   ShieldAlert, 
   Database,
   Lock,
-  Terminal,
   FolderSearch,
   HeartPulse,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  User
 } from 'lucide-react';
 
 import { apiClient } from '../api/client';
 import type { BackendHealth } from '../types';
 
 const Sidebar: React.FC = () => {
-    const [health, setHealth] = React.useState<BackendHealth | null>(null);
+    const [, setHealth] = React.useState<BackendHealth | null>(null);
 
     React.useEffect(() => {
         const fetchHealth = async () => {
@@ -34,31 +34,29 @@ const Sidebar: React.FC = () => {
     }, []);
 
     const nidsItems = [
-        { path: '/', label: 'Overview', icon: <LayoutDashboard size={15} /> },
-        { path: '/flows', label: 'Flows', icon: <Network size={15} /> },
-        { path: '/sessions', label: 'Sessions', icon: <Activity size={15} /> },
-        { path: '/intelligence', label: 'Intelligence', icon: <ShieldAlert size={15} /> },
-        { path: '/ingestion', label: 'Log Analysis', icon: <Database size={15} /> },
+        { path: '/app', label: 'Overview', icon: <LayoutDashboard size={15} /> },
+        { path: '/app/flows', label: 'Flows', icon: <Network size={15} /> },
+        { path: '/app/sessions', label: 'Sessions', icon: <Activity size={15} /> },
+        { path: '/app/intelligence', label: 'Intelligence', icon: <ShieldAlert size={15} /> },
     ];
 
     const hidsItems = [
-        { path: '/hids', label: 'Host Monitor', icon: <FolderSearch size={15} /> },
-        { path: '/health', label: 'Sys Health', icon: <HeartPulse size={15} /> },
-        { path: '/settings', label: 'Settings', icon: <SettingsIcon size={15} /> },
+        { path: '/app/hids', label: 'Host Monitor', icon: <FolderSearch size={15} /> },
+        { path: '/app/health', label: 'Sys Health', icon: <HeartPulse size={15} /> },
+        { path: '/app/settings', label: 'Settings', icon: <SettingsIcon size={15} /> },
     ];
 
-    const isOnline = health?.status === 'online';
+
 
     return (
-        <aside className="w-60 bg-zinc-950/90 backdrop-blur-md border-r border-white/5 h-screen fixed left-0 top-0 hidden md:flex flex-col z-50">
+        <aside className="w-64 bg-[#030712] border-r border-[#1e293b] h-screen fixed left-0 top-0 hidden md:flex flex-col z-50">
             {/* Logo Area */}
-            <div className="h-16 flex items-center px-5 border-b border-white/5 shrink-0">
-                <div className="flex items-center gap-3 text-zinc-100 font-bold tracking-wide">
-                    <div className="p-1.5 bg-zinc-900 border border-white/10 rounded-md shadow-inner">
-                        <Lock size={15} className="text-zinc-300" />
-                    </div>
-                    <span>Shadow<span className="text-zinc-500">SCAN</span></span>
+            <div className="h-14 flex items-center px-5 border-b border-[#1e293b] shrink-0 justify-between">
+                <div className="flex items-center gap-2 text-zinc-100 font-bold tracking-wide">
+                    <Lock size={16} className="text-cyan-500" />
+                    <span>Shadow<span className="text-cyan-500">SCAN</span></span>
                 </div>
+                <span className="text-[9px] font-mono text-zinc-500">v4.2.1</span>
             </div>
 
             {/* Navigation */}
@@ -73,12 +71,12 @@ const Sidebar: React.FC = () => {
                             <NavLink
                                 key={item.path}
                                 to={item.path}
-                                end={item.path === '/'}
+                                end={item.path === '/app'}
                                 className={({ isActive }) =>
-                                    `flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-150 text-sm ${
+                                    `flex items-center gap-3 px-3 py-2 rounded-sm transition-all duration-150 text-xs font-mono uppercase tracking-widest ${
                                         isActive
-                                            ? 'bg-white/[0.06] text-zinc-100 font-medium border-l-2 border-cyan-500'
-                                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03] border-l-2 border-transparent'
+                                            ? 'bg-cyan-950/30 text-cyan-400 font-medium border-l-[3px] border-cyan-500'
+                                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03] border-l-[3px] border-transparent'
                                     }`
                                 }
                             >
@@ -100,10 +98,10 @@ const Sidebar: React.FC = () => {
                                 key={item.path}
                                 to={item.path}
                                 className={({ isActive }) =>
-                                    `flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-150 text-sm ${
+                                    `flex items-center gap-3 px-3 py-2 rounded-sm transition-all duration-150 text-xs font-mono uppercase tracking-widest ${
                                         isActive
-                                            ? 'bg-white/[0.06] text-zinc-100 font-medium border-l-2 border-amber-500'
-                                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03] border-l-2 border-transparent'
+                                            ? 'bg-cyan-950/30 text-cyan-400 font-medium border-l-[3px] border-cyan-500'
+                                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03] border-l-[3px] border-transparent'
                                     }`
                                 }
                             >
@@ -115,37 +113,24 @@ const Sidebar: React.FC = () => {
                 </div>
             </nav>
 
-            {/* Footer Status */}
-            <div className="p-3 border-t border-white/5 shrink-0">
-                <div className="bg-black/40 rounded-md border border-white/5 p-3 space-y-2">
-                    {/* Engine Status */}
-                    <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-wider font-semibold">Engine</span>
-                        <div className="flex items-center gap-1.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse-slow shadow-[0_0_6px_rgba(16,185,129,0.6)]' : 'bg-red-500'}`}></span>
-                            <span className={`text-[9px] font-mono font-semibold ${isOnline ? 'text-emerald-500' : 'text-red-400'}`}>
-                                {isOnline ? 'ONLINE' : 'OFFLINE'}
-                            </span>
+            {/* Analyst Footer */}
+            <div className="p-5 border-t border-[#1e293b] shrink-0">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-[#0f172a] rounded-sm border border-[#1e293b] flex items-center justify-center">
+                            <User size={14} className="text-cyan-500" />
+                        </div>
+                        <div>
+                            <div className="text-[10px] font-mono text-zinc-300 font-bold tracking-widest uppercase">Analyst</div>
+                            <div className="text-[8px] font-mono text-zinc-600">SHDOW\analyst_07</div>
                         </div>
                     </div>
-                    {/* ML Model Status */}
-                    <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-wider font-semibold">ML Model</span>
-                        <span className={`text-[9px] font-mono font-semibold ${health?.ml_model === 'loaded' ? 'text-cyan-400' : 'text-zinc-500'}`}>
-                            {health?.ml_model === 'loaded' ? 'LOADED' : 'OFFLINE'}
-                        </span>
-                    </div>
-                    {/* Pipeline Status */}
-                    <div className="flex items-center justify-between">
-                        <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-wider font-semibold">Pipeline</span>
-                        <span className={`text-[9px] font-mono font-semibold ${health?.pipeline === 'running' ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                            {health?.pipeline === 'running' ? 'RUNNING' : 'STOPPED'}
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-zinc-600 text-[9px] font-mono pt-1 border-t border-white/5">
-                        <Terminal size={10} />
-                        <span>ShadowSCAN v0.1</span>
-                    </div>
+                </div>
+                <div className="flex justify-between items-center mt-4">
+                    <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Clearance Level</span>
+                    <span className="text-[10px] font-mono font-bold text-zinc-300 flex items-center gap-1">
+                        TIER 3
+                    </span>
                 </div>
             </div>
         </aside>
